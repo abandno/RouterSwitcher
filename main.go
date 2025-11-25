@@ -325,6 +325,7 @@ func (app *App) switchToDHCP() {
 
 // showConfigDialog 显示配置对话框
 func (app *App) showConfigDialog() {
+	fmt.Println("显示配置对话框")
 	var dlg *walk.Dialog
 	var db *walk.DataBinder
 	var acceptPB, cancelPB *walk.PushButton
