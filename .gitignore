@@ -3,3 +3,4 @@
 rsrc.syso
 *.exe
 config.json
+*.log

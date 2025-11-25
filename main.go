@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -14,6 +16,16 @@ import (
 var owner walk.Form
 
 func main() {
+	// 创建日志文件
+	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Printf("无法创建日志文件: %v", err)
+	} else {
+		// 将日志同时输出到文件和控制台
+		log.SetOutput(&LogMultiWriter{Console: os.Stdout, File: logFile})
+		defer logFile.Close()
+	}
+
 	// 加载配置
 	config, err := LoadConfig()
 	if err != nil {
@@ -27,8 +39,41 @@ func main() {
 
 	// 运行应用
 	if err := app.Run(); err != nil {
-		log.Fatal(err)
+		log.Printf("应用程序运行出错: %v", err)
+		// 等待用户按键后再退出，以便查看错误信息
+		fmt.Println("\n按任意键退出...")
+		fmt.Scanln()
+		os.Exit(1)
 	}
+}
+
+// LogMultiWriter 同时写入控制台和文件的日志写入器
+type LogMultiWriter struct {
+	Console *os.File
+	File    *os.File
+}
+
+func (w *LogMultiWriter) Write(p []byte) (n int, err error) {
+	// 写入控制台
+	consoleN, consoleErr := w.Console.Write(p)
+	
+	// 写入文件
+	fileN, fileErr := w.File.Write(p)
+	
+	// 返回较长的写入长度和任意一个错误（如果有）
+	if consoleN > fileN {
+		n = consoleN
+	} else {
+		n = fileN
+	}
+	
+	if consoleErr != nil {
+		err = consoleErr
+	} else {
+		err = fileErr
+	}
+	
+	return
 }
 
 // App 应用程序结构
@@ -40,6 +85,12 @@ type App struct {
 
 // Run 运行应用程序
 func (app *App) Run() error {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("应用程序发生未处理的异常: %v", r)
+		}
+	}()
+	
 	// 创建主窗口
 	err := app.createMainWindow()
 	if err != nil {
@@ -173,7 +224,9 @@ func (app *App) createTrayIcon() error {
 
 	// 处理托盘图标点击事件
 	ni.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+		log.Printf("托盘图标被点击: x=%d, y=%d, button=%v", x, y, button)
 		if button == walk.LeftButton {
+			log.Println("左键单击托盘图标，准备显示配置界面")
 			// 左键单击显示配置界面
 			app.showConfigDialog()
 		}
@@ -325,52 +378,126 @@ func (app *App) switchToDHCP() {
 
 // showConfigDialog 显示配置对话框
 func (app *App) showConfigDialog() {
-	fmt.Println("显示配置对话框")
+	log.Println("显示配置对话框...")
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("显示配置对话框时发生错误: %v", r)
+			// 添加堆栈跟踪信息
+			log.Printf("堆栈跟踪信息:\n%s", debug.Stack())
+			// 可以在这里添加更多错误处理逻辑
+		}
+	}()
+	
 	var dlg *walk.Dialog
 	var db *walk.DataBinder
 	var acceptPB, cancelPB *walk.PushButton
 	
 	const spacing = 10
 	
-	Dialog{
+	err := Dialog{
 		AssignTo: &dlg,
-		Title: "路由器切换工具 - 配置",
+		Title:    "路由器切换工具 - 配置",
 		DataBinder: DataBinder{
-			AssignTo: &db,
+			AssignTo:   &db,
 			DataSource: app.config,
 		},
-		MinSize: Size{Width: 300, Height: 200},
+		MinSize: Size{Width: 400, Height: 300},
 		Layout: VBox{
-			Margins: Margins{Left: spacing, Top: spacing, Right: spacing, Bottom: spacing},
-			Spacing: spacing,
+			Margins:  Margins{Left: spacing, Top: spacing, Right: spacing, Bottom: spacing},
+			Spacing:  spacing,
 		},
 		Children: []Widget{
+			Composite{
+				Layout: HBox{},
+				Children: []Widget{
+					CheckBox{
+						Text:     "开机启动",
+						Checked:  Bind("AutoStart"),
+						OnClicked: func() {
+							if err := db.Submit(); err != nil {
+								log.Printf("提交数据失败: %v", err)
+								walk.MsgBox(owner, "错误", fmt.Sprintf("提交数据失败: %v", err), walk.MsgBoxOK|walk.MsgBoxIconError)
+							}
+						},
+					},
+				},
+			},
 			Composite{
 				Layout: Grid{Columns: 2},
 				Children: []Widget{
 					Label{Text: "IP模式:"},
-					ComboBox{
-						Value: Bind("IPMode"),
-						Model: []string{"adaptive", "dynamic", "static"},
+					Composite{
+						Layout: HBox{},
+						Children: []Widget{
+							CheckBox{
+								Text:      "自适应",
+								Checked:   app.config.IPMode == "adaptive",
+								OnClicked: func() { 
+									app.config.IPMode = "adaptive"
+									// 需要更新其他复选框的状态
+								},
+							},
+							CheckBox{
+								Text:      "动态IP",
+								Checked:   app.config.IPMode == "dynamic",
+								OnClicked: func() { 
+									app.config.IPMode = "dynamic"
+									// 需要更新其他复选框的状态
+								},
+							},
+							CheckBox{
+								Text:      "静态IP",
+								Checked:   app.config.IPMode == "static",
+								OnClicked: func() { 
+									app.config.IPMode = "static"
+									// 需要更新其他复选框的状态
+								},
+							},
+						},
 					},
-					
-					Label{Text: "家庭WiFi SSID:"},
-					LineEdit{Text: Bind("HomeSSID")},
-					
-					Label{Text: "静态IP地址:"},
-					LineEdit{Text: Bind("StaticIP")},
-					
-					Label{Text: "网关地址:"},
-					LineEdit{Text: Bind("Gateway")},
-					
-					Label{Text: "DNS服务器:"},
-					LineEdit{Text: Bind("DNS")},
-					
-					Label{Text: "自动切换:"},
-					CheckBox{Checked: Bind("AutoSwitch"), Text: "启用"},
-					
-					Label{Text: "开机自启:"},
-					CheckBox{Checked: Bind("AutoStart"), Text: "启用"},
+				},
+			},
+			Composite{
+				Layout: Grid{Columns: 2},
+				Children: []Widget{
+					Label{Text: "使用静态IP模式的网络"},
+					LineEdit{
+						Text: Bind("HomeSSID"),
+					},
+				},
+			},
+			Composite{
+				Layout: Grid{Columns: 2},
+				Children: []Widget{
+					Label{Text: "静态IP配置"},
+					Composite{},
+				},
+			},
+			Composite{
+				Layout: Grid{Columns: 2},
+				Children: []Widget{
+					Label{Text: "IP地址"},
+					LineEdit{
+						Text: Bind("StaticIP"),
+					},
+				},
+			},
+			Composite{
+				Layout: Grid{Columns: 2},
+				Children: []Widget{
+					Label{Text: "默认网关"},
+					LineEdit{
+						Text: Bind("Gateway"),
+					},
+				},
+			},
+			Composite{
+				Layout: Grid{Columns: 2},
+				Children: []Widget{
+					Label{Text: "DNS"},
+					LineEdit{
+						Text: Bind("DNS"),
+					},
 				},
 			},
 			Composite{
@@ -379,25 +506,31 @@ func (app *App) showConfigDialog() {
 					HSpacer{},
 					PushButton{
 						AssignTo: &acceptPB,
-						Text: "保存",
+						Text:     "保存",
 						OnClicked: func() {
 							if err := db.Submit(); err != nil {
-								log.Print(err)
+								log.Printf("提交数据失败: %v", err)
+								walk.MsgBox(owner, "错误", fmt.Sprintf("提交数据失败: %v", err), walk.MsgBoxOK|walk.MsgBoxIconError)
 								return
 							}
-							
+
 							// 保存配置到文件
-							SaveConfig(app.config)
-							
+							err := SaveConfig(app.config)
+							if err != nil {
+								log.Printf("保存配置失败: %v", err)
+								walk.MsgBox(owner, "错误", fmt.Sprintf("保存配置失败: %v", err), walk.MsgBoxOK|walk.MsgBoxIconError)
+								return
+							}
+
 							// 根据新的配置触发网络检查
 							go app.checkAndSwitch()
-							
+
 							dlg.Accept()
 						},
 					},
 					PushButton{
 						AssignTo: &cancelPB,
-						Text: "取消",
+						Text:     "取消",
 						OnClicked: func() {
 							dlg.Cancel()
 						},
@@ -406,4 +539,12 @@ func (app *App) showConfigDialog() {
 			},
 		},
 	}.Create(owner)
+	
+	if err != nil {
+		log.Printf("创建配置对话框失败: %v", err)
+		walk.MsgBox(owner, "错误", fmt.Sprintf("创建配置对话框失败: %v", err), walk.MsgBoxOK|walk.MsgBoxIconError)
+	} else {
+		log.Println("配置对话框创建成功")
+		dlg.Run()
+	}
 }
