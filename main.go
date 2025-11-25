@@ -426,34 +426,9 @@ func (app *App) showConfigDialog() {
 				Layout: Grid{Columns: 2},
 				Children: []Widget{
 					Label{Text: "IP模式:"},
-					Composite{
-						Layout: HBox{},
-						Children: []Widget{
-							CheckBox{
-								Text:      "自适应",
-								Checked:   app.config.IPMode == "adaptive",
-								OnClicked: func() { 
-									app.config.IPMode = "adaptive"
-									// 需要更新其他复选框的状态
-								},
-							},
-							CheckBox{
-								Text:      "动态IP",
-								Checked:   app.config.IPMode == "dynamic",
-								OnClicked: func() { 
-									app.config.IPMode = "dynamic"
-									// 需要更新其他复选框的状态
-								},
-							},
-							CheckBox{
-								Text:      "静态IP",
-								Checked:   app.config.IPMode == "static",
-								OnClicked: func() { 
-									app.config.IPMode = "static"
-									// 需要更新其他复选框的状态
-								},
-							},
-						},
+					ComboBox{
+						Value: Bind("IPMode"),
+						Model: []string{"adaptive", "dynamic", "static"},
 					},
 				},
 			},
@@ -470,7 +445,7 @@ func (app *App) showConfigDialog() {
 				Layout: Grid{Columns: 2},
 				Children: []Widget{
 					Label{Text: "静态IP配置"},
-					Composite{},
+					Label{Text: ""}, // 使用空Label替代空Composite
 				},
 			},
 			Composite{
