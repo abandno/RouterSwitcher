@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "RouterSwitcher",
+  "outputfilename": "RouterSwitcher",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Nisus Liu",
+    "email": "609069481@qq.com"
+  },
+  "system tray": {
+    "enabled": true
+  }
+}

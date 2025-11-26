@@ -1,7 +1,10 @@
 @echo off
-echo 正在启动 RouterSwitcher...
-echo ========================
-RouterSwitcher.exe
-echo ========================
-echo 程序已退出，按任意键关闭此窗口...
-pause >nul
+echo 正在启动开发模式...
+
+if not exist frontend/node_modules (
+    echo 安装前端依赖...
+    cd frontend && npm install && cd ..
+)
+
+echo 启动Wails开发服务器...
+wails dev
