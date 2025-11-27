@@ -177,7 +177,17 @@ func (a *WailsApp) isConnectedToHomeNetwork() bool {
 	cmd := exec.Command("netsh", "wlan", "show", "interfaces")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("执行netsh命令失败: %v", err)
+		outputStr := string(output)
+		log.Printf("执行netsh命令失败: %v. %v", err, outputStr)
+		
+		// 检查是否因为位置服务禁用导致无法获取SSID
+		if strings.Contains(outputStr, "命令需要位置权限才能访问") || 
+		   strings.Contains(outputStr, "WlanQueryInterface 返回错误 5") ||
+		   strings.Contains(outputStr, "拒绝访问") ||
+		   strings.Contains(outputStr, "Network shell commands need location permission") {
+			log.Println("检测到位置服务被禁用，提示用户开启位置服务以获取WiFi信息")
+			a.promptUserToEnableLocationService()
+		}
 		return false
 	}
 
@@ -203,6 +213,67 @@ func (a *WailsApp) isConnectedToHomeNetwork() bool {
 	}
 
 	return false
+}
+
+// 添加一个全局变量来跟踪是否已经显示过弹窗
+var locationServicePromptShown = false
+
+// promptUserToEnableLocationService 提示用户开启位置服务
+func (a *WailsApp) promptUserToEnableLocationService() {
+	// 检查是否已经显示过弹窗，避免重复弹窗引起用户恐慌
+	if locationServicePromptShown {
+		log.Println("位置服务提示弹窗已显示过，避免重复弹窗")
+		return
+	}
+	
+	log.Println("==============================================")
+	log.Println("检测到位置服务被禁用，无法获取WiFi信息")
+	log.Println("请按以下步骤开启位置服务：")
+	log.Println("1. 打开Windows设置 (Win + I)")
+	log.Println("2. 进入「隐私和安全」->「位置」")
+	log.Println("3. 开启「位置服务」开关")
+	log.Println("或者在运行对话框中执行以下命令打开位置设置：")
+	log.Println("   Win + R -> 输入: ms-settings:privacy-location")
+	log.Println("或者终端命令行中输入: start ms-settings:privacy-location")
+	log.Println("==============================================")
+	
+	// 在GUI中显示提示信息
+	if a.ctx != nil {
+		// 设置标记，表示即将显示弹窗
+		locationServicePromptShown = true
+		
+		// 显示弹窗并获取用户响应
+		result, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+			Type:    runtime.InfoDialog,
+			Title:   "需要开启位置服务",
+			Message: `检测到位置服务被禁用，无法获取WiFi信息。
+
+请按以下步骤开启位置服务：
+1. 打开Windows设置 (Win + I)
+2. 进入「隐私和安全」->「位置」
+3. 开启「位置服务」开关
+
+将自动打开位置设置页面！
+或者：Win + R -> 输入: ms-settings:privacy-location
+或者：终端命令行中输入: start ms-settings:privacy-location`,
+			Buttons: []string{"确定", "取消"},
+		})
+		// 或者 Win + R -> 输入: ms-settings:privacy-location
+		// 或者终端命令行中输入: start ms-settings:privacy-location
+		// 或者点击确定按钮自动打开位置设置页面。
+		
+		// 处理可能的错误
+		if err != nil {
+			log.Printf("显示提示弹窗时发生错误: %v", err)
+		}
+		
+		
+		// 无论用户点击什么按钮，都重置标记以便下次可以再次显示弹窗
+		locationServicePromptShown = false
+		
+		log.Printf("用户选择: %s", result) // x和确定, 点击TM都是 Ok
+		exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start()
+	}
 }
 
 // isSideRouterReachable 检查旁路由是否可达
@@ -293,6 +364,7 @@ func (lmw *LogMultiWriter) Write(p []byte) (n int, err error) {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// 创建日志文件
 	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
