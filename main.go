@@ -140,6 +140,12 @@ func (a *WailsApp) IsSideRouterReachable() bool {
 	return a.isSideRouterReachable()
 }
 
+// OpenLocationSettings 打开位置设置页面
+func (a *WailsApp) OpenLocationSettings() error {
+	cmd := exec.Command("cmd", "/C", "start", "ms-settings:privacy-location")
+	return cmd.Start()
+}
+
 // monitorNetwork 监控网络变化
 func (a *WailsApp) monitorNetwork() {
 	for {
@@ -243,6 +249,14 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 		locationServicePromptShown = true
 		
 		// 显示弹窗并获取用户响应
+// 		result, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+// 			Type:    runtime.InfoDialog,
+// 			Title:   "需要开启位置服务",
+// 			Message: `检测到位置服务被禁用，无法获取WiFi信息。
+// 请在应用界面中点击"位置服务帮助"按钮获取详细操作指南。`,
+// 			Buttons: []string{"确定", "取消"},
+// 		})
+
 		result, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
 			Type:    runtime.InfoDialog,
 			Title:   "需要开启位置服务",
@@ -256,21 +270,20 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 将自动打开位置设置页面！
 或者：Win + R -> 输入: ms-settings:privacy-location
 或者：终端命令行中输入: start ms-settings:privacy-location`,
-			Buttons: []string{"确定", "取消"},
-		})
+					Buttons: []string{"确定", "取消"},
+				})
 		// 或者 Win + R -> 输入: ms-settings:privacy-location
 		// 或者终端命令行中输入: start ms-settings:privacy-location
 		// 或者点击确定按钮自动打开位置设置页面。
-		
-		// 处理可能的错误
 		if err != nil {
 			log.Printf("显示提示弹窗时发生错误: %v", err)
 		}
 		
+		// 记录事件
+		// log.Printf("已提示用户开启位置服务，MessageDialog返回值: %s", result)
 		
 		// 无论用户点击什么按钮，都重置标记以便下次可以再次显示弹窗
-		locationServicePromptShown = false
-		
+		// locationServicePromptShown = false
 		log.Printf("用户选择: %s", result) // x和确定, 点击TM都是 Ok
 		exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start()
 	}

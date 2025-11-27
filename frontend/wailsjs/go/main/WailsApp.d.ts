@@ -12,6 +12,8 @@ export function IsConnectedToHomeNetwork():Promise<boolean>;
 
 export function IsSideRouterReachable():Promise<boolean>;
 
+export function OpenLocationSettings():Promise<void>;
+
 export function SaveConfig(arg1:main.Config):Promise<void>;
 
 export function SwitchToDHCP():Promise<void>;

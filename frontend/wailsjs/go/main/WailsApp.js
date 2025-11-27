@@ -22,6 +22,10 @@ export function IsSideRouterReachable() {
   return window['go']['main']['WailsApp']['IsSideRouterReachable']();
 }
 
+export function OpenLocationSettings() {
+  return window['go']['main']['WailsApp']['OpenLocationSettings']();
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['WailsApp']['SaveConfig'](arg1);
 }
