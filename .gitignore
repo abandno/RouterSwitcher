@@ -7,3 +7,5 @@ config.json
 build/bin
 node_modules
 frontend/dist
+.task
+bin

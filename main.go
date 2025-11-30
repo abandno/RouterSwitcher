@@ -5,23 +5,13 @@ import (
 	"embed"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
-	"github.com/energye/systray"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/menu"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
@@ -32,8 +22,15 @@ var icon []byte
 
 // WailsApp struct
 type WailsApp struct {
-	ctx    context.Context
-	config *Config
+	ctx          context.Context
+	config       *Config
+	app          *application.App
+	systemTray   *application.SystemTray
+	trayMenu     *application.Menu
+	adaptiveItem *application.MenuItem
+	dynamicItem  *application.MenuItem
+	staticItem   *application.MenuItem
+	exitItem     *application.MenuItem
 }
 
 // NewWailsApp creates a new WailsApp application struct
@@ -54,78 +51,133 @@ func NewWailsApp() *WailsApp {
 func (a *WailsApp) startup(ctx context.Context) {
 	log.Println("启动路由器切换工具")
 	a.ctx = ctx
-	
+
 	// 创建系统托盘菜单
 	a.createTrayMenu()
-	
+
 	// 启动网络监控
 	go a.monitorNetwork()
 }
 
 // createTrayMenu 创建系统托盘菜单
 func (a *WailsApp) createTrayMenu() {
-	appMenu := menu.NewMenu()
+	log.Println("创建系统托盘菜单")
 
-	// 添加IP模式选项
-	ipModeMenu := appMenu.AddSubmenu("IP模式")
-	
-	adaptiveItem := ipModeMenu.AddCheckbox("自适应IP", a.config.IPMode == "adaptive", nil, func(data *menu.CallbackData) {
+	if a.app == nil {
+		log.Println("app未初始化，无法创建托盘菜单")
+		return
+	}
+
+	// 创建系统托盘
+	a.systemTray = a.app.SystemTray.New()
+	a.systemTray.SetIcon(icon)
+	a.systemTray.SetTooltip("路由器切换工具")
+
+	// 创建菜单
+	a.trayMenu = application.NewMenu()
+
+	// 创建菜单项（使用AddRadio方法，实现单选效果）
+	a.adaptiveItem = a.trayMenu.AddRadio("自适应IP", false)
+	a.adaptiveItem.OnClick(func(*application.Context) {
+		log.Println("切换到自适应IP模式")
 		a.config.IPMode = "adaptive"
-		SaveConfig(a.config)
-		// 触发自适应检查
+		if err := SaveConfig(a.config); err != nil {
+			log.Printf("保存配置失败: %v", err)
+		}
+		a.updateTrayMenuState()
 		go a.checkAndSwitch()
 	})
-	
-	dynamicItem := ipModeMenu.AddCheckbox("动态IP", a.config.IPMode == "dynamic", nil, func(data *menu.CallbackData) {
+
+	a.dynamicItem = a.trayMenu.AddRadio("动态IP", false)
+	a.dynamicItem.OnClick(func(*application.Context) {
+		log.Println("切换到动态IP模式")
 		a.config.IPMode = "dynamic"
-		SaveConfig(a.config)
-		a.switchToDHCP()
+		if err := SaveConfig(a.config); err != nil {
+			log.Printf("保存配置失败: %v", err)
+		}
+		a.updateTrayMenuState()
+		go a.switchToDHCP()
 	})
-	
-	staticItem := ipModeMenu.AddCheckbox("静态IP", a.config.IPMode == "static", nil, func(data *menu.CallbackData) {
+
+	a.staticItem = a.trayMenu.AddRadio("静态IP", false)
+	a.staticItem.OnClick(func(*application.Context) {
+		log.Println("切换到静态IP模式")
 		a.config.IPMode = "static"
-		SaveConfig(a.config)
-		a.switchToStatic()
+		if err := SaveConfig(a.config); err != nil {
+			log.Printf("保存配置失败: %v", err)
+		}
+		a.updateTrayMenuState()
+		go a.switchToStatic()
 	})
 
-	// 确保只有一个选项被选中
-	updateMenuCheckStates := func() {
-		adaptiveItem.SetChecked(a.config.IPMode == "adaptive")
-		dynamicItem.SetChecked(a.config.IPMode == "dynamic")
-		staticItem.SetChecked(a.config.IPMode == "static")
-	}
+	a.trayMenu.AddSeparator()
 
-	// 更新各个菜单项的点击处理函数，确保互斥选择
-	adaptiveItem.Click = func(data *menu.CallbackData) {
-		a.config.IPMode = "adaptive"
-		SaveConfig(a.config)
-		updateMenuCheckStates()
-		go a.checkAndSwitch()
-	}
-	
-	dynamicItem.Click = func(data *menu.CallbackData) {
-		a.config.IPMode = "dynamic"
-		SaveConfig(a.config)
-		a.switchToDHCP()
-		updateMenuCheckStates()
-	}
-	
-	staticItem.Click = func(data *menu.CallbackData) {
-		a.config.IPMode = "static"
-		SaveConfig(a.config)
-		a.switchToStatic()
-		updateMenuCheckStates()
-	}
-	
-	// 分隔线
-	appMenu.AddSeparator()
-	
-	// 添加退出选项
-	appMenu.AddText("退出", nil, func(data *menu.CallbackData) {
-		log.Println("用户选择退出程序")
-		wailsruntime.Quit(a.ctx)
+	a.exitItem = a.trayMenu.Add("退出")
+	a.exitItem.OnClick(func(*application.Context) {
+		log.Println("退出程序")
+		a.app.Quit()
 	})
 
+	// 设置托盘菜单
+	a.systemTray.SetMenu(a.trayMenu)
+
+	// 设置托盘图标点击事件
+	a.systemTray.OnClick(func() {
+		log.Println("托盘图标被单击")
+		// 单击显示配置界面
+		if a.app != nil {
+			a.app.Show()
+		}
+	})
+
+	a.systemTray.OnDoubleClick(func() {
+		log.Println("托盘图标被双击")
+		// 双击也显示配置界面
+		if a.app != nil {
+			a.app.Show()
+		}
+	})
+
+	// 显示系统托盘
+	a.systemTray.Show()
+
+	// 更新菜单状态
+	a.updateTrayMenuState()
+}
+
+// updateTrayMenuState 更新托盘菜单状态（根据当前IP模式设置勾选状态）
+func (a *WailsApp) updateTrayMenuState() {
+	// 清除所有勾选状态
+	if a.adaptiveItem != nil {
+		a.adaptiveItem.SetChecked(false)
+	}
+	if a.dynamicItem != nil {
+		a.dynamicItem.SetChecked(false)
+	}
+	if a.staticItem != nil {
+		a.staticItem.SetChecked(false)
+	}
+
+	// 根据当前模式设置勾选状态
+	switch a.config.IPMode {
+	case "adaptive":
+		if a.adaptiveItem != nil {
+			a.adaptiveItem.SetChecked(true)
+		}
+	case "dynamic":
+		if a.dynamicItem != nil {
+			a.dynamicItem.SetChecked(true)
+		}
+	case "static":
+		if a.staticItem != nil {
+			a.staticItem.SetChecked(true)
+		}
+	}
+
+	// 更新菜单显示
+	if a.trayMenu != nil {
+		a.trayMenu.Update()
+	}
 }
 
 // Greet returns a greeting for the given name
@@ -146,6 +198,13 @@ func (a *WailsApp) SaveConfig(config *Config) error {
 		return err
 	}
 	log.Printf("保存配置成功: %+v\n", config)
+
+	// 更新托盘菜单状态
+	a.updateTrayMenuState()
+
+	// 处理开机启动
+	a.handleAutoStart()
+
 	// 触发网络检查
 	go a.checkAndSwitch()
 	return nil
@@ -159,6 +218,16 @@ func (a *WailsApp) SwitchToStatic() {
 // SwitchToDHCP 切换到动态IP模式
 func (a *WailsApp) SwitchToDHCP() {
 	a.switchToDHCP()
+}
+
+// SwitchToAdaptive 切换到自适应IP模式
+func (a *WailsApp) SwitchToAdaptive() {
+	a.config.IPMode = "adaptive"
+	if err := SaveConfig(a.config); err != nil {
+		log.Printf("保存配置失败: %v", err)
+	}
+	a.updateTrayMenuState()
+	go a.checkAndSwitch()
 }
 
 // CheckAndSwitch 检查网络状态并切换配置
@@ -221,12 +290,12 @@ func (a *WailsApp) isConnectedToHomeNetwork() bool {
 	if err != nil {
 		outputStr := string(output)
 		log.Printf("执行netsh命令失败: %v. %v", err, outputStr)
-		
+
 		// 检查是否因为位置服务禁用导致无法获取SSID
-		if strings.Contains(outputStr, "命令需要位置权限才能访问") || 
-		   strings.Contains(outputStr, "WlanQueryInterface 返回错误 5") ||
-		   strings.Contains(outputStr, "拒绝访问") ||
-		   strings.Contains(outputStr, "Network shell commands need location permission") {
+		if strings.Contains(outputStr, "命令需要位置权限才能访问") ||
+			strings.Contains(outputStr, "WlanQueryInterface 返回错误 5") ||
+			strings.Contains(outputStr, "拒绝访问") ||
+			strings.Contains(outputStr, "Network shell commands need location permission") {
 			log.Println("检测到位置服务被禁用，提示用户开启位置服务以获取WiFi信息")
 			a.promptUserToEnableLocationService()
 		}
@@ -267,7 +336,7 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 		log.Println("位置服务提示弹窗已显示过，避免重复弹窗")
 		return
 	}
-	
+
 	log.Println("==============================================")
 	log.Println("检测到位置服务被禁用，无法获取WiFi信息")
 	log.Println("请按以下步骤开启位置服务：")
@@ -278,25 +347,26 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 	log.Println("   Win + R -> 输入: ms-settings:privacy-location")
 	log.Println("或者终端命令行中输入: start ms-settings:privacy-location")
 	log.Println("==============================================")
-	
+
 	// 在GUI中显示提示信息
 	if a.ctx != nil {
 		// 设置标记，表示即将显示弹窗
 		locationServicePromptShown = true
-		
-		// 显示弹窗并获取用户响应
-	// 		result, err := wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
-	// 			Type:    wailsruntime.InfoDialog,
-	// 			Title:   "需要开启位置服务",
-	// 			Message: `检测到位置服务被禁用，无法获取WiFi信息。
-	// 请在应用界面中点击"位置服务帮助"按钮获取详细操作指南。`,
-	// 			Buttons: []string{"确定", "取消"},
-	// 		})
 
-		result, err := wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
-			Type:    wailsruntime.InfoDialog,
-			Title:   "需要开启位置服务",
-			Message: `检测到位置服务被禁用，无法获取WiFi信息。
+		// 显示弹窗并获取用户响应
+		// 		result, err := wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
+		// 			Type:    wailsruntime.InfoDialog,
+		// 			Title:   "需要开启位置服务",
+		// 			Message: `检测到位置服务被禁用，无法获取WiFi信息。
+		// 请在应用界面中点击"位置服务帮助"按钮获取详细操作指南。`,
+		// 			Buttons: []string{"确定", "取消"},
+		// 		})
+
+		// 使用DialogManager显示信息对话框
+		if a.app != nil {
+			dialog := a.app.Dialog.Info()
+			dialog.SetTitle("需要开启位置服务")
+			dialog.SetMessage(`检测到位置服务被禁用，无法获取WiFi信息。
 
 请按以下步骤开启位置服务：
 1. 打开Windows设置 (Win + I)
@@ -305,23 +375,13 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 
 将自动打开位置设置页面！
 或者：Win + R -> 输入: ms-settings:privacy-location
-或者：终端命令行中输入: start ms-settings:privacy-location`,
-					Buttons: []string{"确定", "取消"},
-				})
-		// 或者 Win + R -> 输入: ms-settings:privacy-location
-		// 或者终端命令行中输入: start ms-settings:privacy-location
-		// 或者点击确定按钮自动打开位置设置页面。
-		if err != nil {
-			log.Printf("显示提示弹窗时发生错误: %v", err)
+或者：终端命令行中输入: start ms-settings:privacy-location`)
+			dialog.AddButton("确定")
+			dialog.Show()
+
+			// 自动打开位置设置页面
+			exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start()
 		}
-		
-		// 记录事件
-		// log.Printf("已提示用户开启位置服务，MessageDialog返回值: %s", result)
-		
-		// 无论用户点击什么按钮，都重置标记以便下次可以再次显示弹窗
-		// locationServicePromptShown = false
-		log.Printf("用户选择: %s", result) // x和确定, 点击TM都是 Ok
-		exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start()
 	}
 }
 
@@ -335,192 +395,77 @@ func (a *WailsApp) isSideRouterReachable() bool {
 // switchToStatic 切换到静态IP模式
 func (a *WailsApp) switchToStatic() {
 	log.Printf("开始切换静态IP")
-	
+
 	// 获取活动网络接口
 	iface, err := GetActiveInterface()
 	if err != nil {
 		log.Printf("获取网络接口失败: %v", err)
 		return
 	}
-	
+
 	// 检查当前是否已经是目标静态IP配置
 	isStatic, err := GetCurrentStaticIPConfig(iface, a.config.StaticIP, a.config.Gateway, a.config.DNS)
 	if err == nil && isStatic {
 		log.Printf("当前已经是目标静态IP配置, 无需重复设置: IP=%s, Gateway=%s, DNS=%s\n", a.config.StaticIP, a.config.Gateway, a.config.DNS)
 		return
 	}
-	
+
 	// 设置静态IP (这里使用默认子网掩码 255.255.255.0)
 	err = SetStaticIP(iface, a.config.StaticIP, "255.255.255.0", a.config.Gateway, a.config.DNS)
 	if err != nil {
 		log.Printf("设置静态IP失败: %v", err)
 		return
 	}
-	
+
 	log.Printf("成功切换到静态IP模式: IP=%s, Gateway=%s, DNS=%s\n", a.config.StaticIP, a.config.Gateway, a.config.DNS)
 }
 
 // switchToDHCP 切换到自动获取IP模式
 func (a *WailsApp) switchToDHCP() {
 	log.Println("开始切换动态IP")
-	
+
 	// 获取活动网络接口
 	iface, err := GetActiveInterface()
 	if err != nil {
 		log.Printf("获取网络接口失败: %v", err)
 		return
 	}
-	
+
 	// 检查当前是否已经是DHCP模式
 	isDHCP, err := GetCurrentIPConfig(iface)
 	if err == nil && isDHCP {
 		log.Println("当前已经是DHCP模式, 无需重复设置")
 		return
 	}
-	
+
 	// 设置为DHCP
 	err = SetDHCP(iface)
 	if err != nil {
 		log.Printf("设置DHCP失败: %v", err)
 		return
 	}
-	
+
 	log.Println("成功切换到DHCP模式")
 }
 
-func addQuitItem() {
-	// 在这里不添加任何与退出相关的菜单项，因为退出功能已由Wails主菜单处理
-	// mQuit := systray.AddMenuItem("Quit(退出)", "Quit the whole app")
-	// mQuit.Enable()
-	// mQuit.Click(func() {
-	// 	fmt.Println("Requesting quit")
-	// 	systray.Quit()
-	// 	fmt.Println("Finished quitting")
-	// })
-	// 我们不再在这里添加退出项，以避免出现两个退出选项
-}
-
-// https://github.com/energye/systray/blob/main/example/main.go
-func (a *WailsApp) onReady() {
-	fmt.Println("systray.onReady")
-	systray.SetTemplateIcon(icon, icon)
-	systray.SetTitle("Energy Sys Tray")
-	systray.SetTooltip("Energy tooltip")
-	systray.SetOnClick(func(menu systray.IMenu) {
-		// 单击托盘图标显示配置页面
-		if  a!= nil && a.ctx != nil {
-			wailsruntime.Show(a.ctx)
-		}
-		fmt.Println("SetOnClick")
-	})
-	systray.SetOnDClick(func(menu systray.IMenu) {
-		if menu != nil { // menu for linux nil
-			menu.ShowMenu()
-		}
-		fmt.Println("SetOnDClick")
-	})
-	// OnRClick linux not impl
-	systray.SetOnRClick(func(menu systray.IMenu) {
-		menu.ShowMenu()
-		fmt.Println("SetOnRClick")
-	})
-	systray.CreateMenu()
-	addQuitItem()
-	systray.SetTemplateIcon(icon, icon)
-	mChange := systray.AddMenuItem("Change Me", "Change Me")
-	mChecked := systray.AddMenuItemCheckbox("Checked", "Check Me", true)
-	mEnabled := systray.AddMenuItem("Enabled", "Enabled")
-	// Sets the icon of a menu item. Only available on Mac.
-	mEnabled.SetTemplateIcon(icon, icon)
-
-	systray.AddMenuItem("Ignored", "Ignored")
-
-	subMenuTop := systray.AddMenuItem("SubMenuTop", "SubMenu Test (top)")
-	subMenuMiddle := subMenuTop.AddSubMenuItem("SubMenuMiddle", "SubMenu Test (middle)")
-	subMenuBottom := subMenuMiddle.AddSubMenuItemCheckbox("SubMenuBottom - Toggle Panic!", "SubMenu Test (bottom) - Hide/Show Panic!", false)
-	subMenuBottom2 := subMenuMiddle.AddSubMenuItem("SubMenuBottom - Panic!", "SubMenu Test (bottom)")
-	subMenuBottom2.SetIcon(icon)
-	systray.AddSeparator()
-	mToggle := systray.AddMenuItem("Toggle", "Toggle some menu items")
-	shown := true
-	toggle := func() {
-		if shown {
-			subMenuBottom.Check()
-			subMenuBottom2.Hide()
-			mEnabled.Hide()
-			shown = false
-			mEnabled.Disable()
+// handleAutoStart 处理开机启动
+func (a *WailsApp) handleAutoStart() {
+	if a.config.AutoStart {
+		err := EnableAutoStart()
+		if err != nil {
+			log.Printf("启用开机启动失败: %v", err)
 		} else {
-			subMenuBottom.Uncheck()
-			subMenuBottom2.Show()
-			mEnabled.Show()
-			mEnabled.Enable()
-			shown = true
+			log.Println("已启用开机启动")
+		}
+	} else {
+		err := DisableAutoStart()
+		if err != nil {
+			log.Printf("禁用开机启动失败: %v", err)
+		} else {
+			log.Println("已禁用开机启动")
 		}
 	}
-	mReset := systray.AddMenuItem("Reset", "Reset all items")
-
-	mChange.Click(func() {
-		mChange.SetTitle("I've Changed")
-	})
-	mChecked.Click(func() {
-		if mChecked.Checked() {
-			mChecked.Uncheck()
-			mChecked.SetTitle("Unchecked")
-		} else {
-			mChecked.Check()
-			mChecked.SetTitle("Checked")
-		}
-	})
-	mEnabled.Click(func() {
-		mEnabled.SetTitle("Disabled")
-		fmt.Println("mEnabled.Disabled()", mEnabled.Disabled())
-		mEnabled.Disable()
-	})
-	subMenuBottom2.Click(func() {
-		panic("panic button pressed")
-	})
-	subMenuBottom.Click(func() {
-		toggle()
-	})
-	mReset.Click(func() {
-		systray.ResetMenu()
-		addQuitItem()
-	})
-	mToggle.Click(func() {
-		toggle()
-	})
-	// tray icon switch
-	go func() {
-		var b bool
-		// demo: to png full path
-		wd, _ := os.Getwd()
-		wd = strings.Replace(wd, "example", "", -1)
-		wd = filepath.Join(wd, "icon")
-		fmt.Println("wd", wd) // /to/icon/path/icon.png, logo.png
-		var ext = ".png"
-		if runtime.GOOS == "windows" {
-			ext = ".ico" // windows .ico
-		}
-		icoData, _ := ioutil.ReadFile(filepath.Join(wd, "icon"+ext))
-		logoData, _ := ioutil.ReadFile(filepath.Join(wd, "logo"+ext))
-		for true {
-			time.Sleep(time.Second * 1)
-			b = !b
-			if b {
-				systray.SetIcon(logoData)
-			} else {
-				systray.SetIcon(icoData)
-			}
-		}
-	}()
 }
-
-func (a *WailsApp) onExit() {
-		now := time.Now()
-		ioutil.WriteFile(fmt.Sprintf(`on_exit_%d.log`, now.UnixNano()), []byte(now.String()), 0644)
-	}
-
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -539,37 +484,27 @@ func main() {
 	app := NewWailsApp()
 
 	// Create application with options
-	err = wails.Run(&options.App{
-		Title:  "路由器切换工具",
-		Width:  800,
-		Height: 500,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		// OnStartup:        app.startup,
-		Bind: []interface{}{
-			app,
-		},
-		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-			DisableWindowIcon:    false,
-		},
-		Mac: &mac.Options{
-			Appearance:           mac.NSAppearanceNameDarkAqua,
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
-			About: &mac.AboutInfo{
-				Title:   "路由器切换工具",
-				Message: "© 2025 RouterSwitcher",
-			},
+	appInstance := application.New(application.Options{
+		Name:   "路由器切换工具",
+		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
+		Logger: nil,
+		Services: []application.Service{
+			application.NewService(app),
 		},
 	})
 
+	app.app = appInstance
+
+	// 处理开机启动（在启动前处理）
+	app.handleAutoStart()
+
+	// Run the application
+	err = appInstance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("应用启动")
 
-	systray.Run(app.onReady, app.onExit)
+	// 应用启动后初始化
+	app.startup(appInstance.Context())
 }
