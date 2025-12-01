@@ -119,15 +119,39 @@ func (a *WailsApp) createTrayMenu() {
 	// 设置托盘图标点击事件
 	a.systemTray.OnClick(func() {
 		log.Println("托盘图标被单击")
-		// 单击显示配置界面
-		a.showWindow()
+
+		// 如果主窗口还没创建，先创建并显示
+		if a.mainWindow == nil {
+			log.Println("主窗口不存在，创建并显示")
+			a.showWindow()
+			// showWindow 内部会负责触发 windowShown 事件
+			return
+		}
+
+		// 主窗口已存在时，点击托盘图标在 显示/隐藏 之间切换
+		if a.mainWindow.IsVisible() {
+			log.Println("主窗口可见，隐藏窗口")
+			a.mainWindow.Hide()
+			// 通知前端窗口已隐藏
+			if a.app != nil && a.app.Event != nil {
+				go a.app.Event.Emit("windowHidden")
+			}
+		} else {
+			log.Println("主窗口不可见，显示窗口")
+			a.mainWindow.Show()
+			a.mainWindow.Focus()
+			// 通知前端窗口已显示
+			if a.app != nil && a.app.Event != nil {
+				go a.app.Event.Emit("windowShown")
+			}
+		}
 	})
 
-	a.systemTray.OnDoubleClick(func() {
-		log.Println("托盘图标被双击")
-		// 双击也显示配置界面
-		a.showWindow()
-	})
+	// a.systemTray.OnDoubleClick(func() {
+	// 	log.Println("托盘图标被双击")
+	// 	// 双击也显示配置界面
+	// 	a.showWindow()
+	// })
 
 	// 显示系统托盘
 	a.systemTray.Show()
@@ -138,6 +162,7 @@ func (a *WailsApp) createTrayMenu() {
 
 // updateTrayMenuState 更新托盘菜单状态（根据当前IP模式设置勾选状态）
 func (a *WailsApp) updateTrayMenuState() {
+	log.Println("updateTrayMenuState", a.config.IPMode)
 	// 清除所有勾选状态
 	if a.adaptiveItem != nil {
 		a.adaptiveItem.SetChecked(false)
@@ -165,9 +190,10 @@ func (a *WailsApp) updateTrayMenuState() {
 		}
 	}
 
-	// 更新菜单显示
-	if a.trayMenu != nil {
-		a.trayMenu.Update()
+	// 更新托盘菜单显示
+	if a.systemTray != nil && a.trayMenu != nil {
+		// 重新应用菜单到系统托盘，确保勾选状态刷新
+		a.systemTray.SetMenu(a.trayMenu)
 	}
 }
 
@@ -183,6 +209,10 @@ func (a *WailsApp) showWindow() {
 		log.Println("显示现有窗口")
 		a.mainWindow.Show()
 		a.mainWindow.Focus()
+		// 通知前端窗口已显示
+		if a.app != nil && a.app.Event != nil {
+			go a.app.Event.Emit("windowShown")
+		}
 		return
 	}
 
@@ -224,6 +254,11 @@ func (a *WailsApp) showWindow() {
 	// 显示窗口
 	newWindow.Show()
 	log.Println("新窗口已创建并显示，关闭事件监听已设置")
+
+	// 通知前端窗口已显示
+	if a.app != nil && a.app.Event != nil {
+		go a.app.Event.Emit("windowShown")
+	}
 }
 
 // HideWindow 隐藏窗口（由前端调用，用于拦截窗口关闭）
@@ -232,6 +267,10 @@ func (a *WailsApp) HideWindow() {
 	if a.mainWindow != nil {
 		a.mainWindow.Hide()
 		log.Println("窗口已隐藏")
+		// 通知前端窗口已隐藏
+		if a.app != nil && a.app.Event != nil {
+			go a.app.Event.Emit("windowHidden")
+		}
 	} else {
 		log.Println("主窗口为 nil，无法隐藏")
 	}
@@ -260,6 +299,14 @@ func (a *WailsApp) UpdateConfig(config *Config) error {
 
 	// 更新托盘菜单状态
 	a.updateTrayMenuState()
+
+	// 通知前端配置已更新
+	if a.app != nil && a.app.Event != nil {
+		go a.app.Event.Emit("configUpdated", a.config)
+		log.Println("通知前端配置已更新")
+	} else {
+		log.Println("应用未初始化, 无法发送 configUpdated 事件")
+	}
 
 	// 处理开机启动
 	a.handleAutoStart()

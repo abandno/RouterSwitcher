@@ -110,6 +110,7 @@
 
 <script>
 import { GetConfig, UpdateConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable } from '../../bindings/RouterSwitcher/wailsapp'
+import { Events } from '@wailsio/runtime'
 
 export default {
   name: 'ConfigManager',
@@ -125,16 +126,70 @@ export default {
       },
       switching: false,
       isConnectedToHome: false,
-      isSideRouterReachable: false
+      isSideRouterReachable: false,
+      configUpdatedOff: null,
+      windowShownOff: null,
+      windowHiddenOff: null,
+      networkStatusTimer: null
     }
   },
   async mounted() {
-    // 等待 Wails 运行时准备就绪
-    await this.waitForRuntime()
-    await this.loadConfig()
+    setTimeout(async () => {
+      console.log('==mounted', this.config)
+      await this.loadConfig()
+    }, 1 * 1000)
+    // setInterval(async () => {
+    //   await this.loadConfig()
+    // }, 5 * 1000)
+    // 监听后端发出的 configUpdated 事件，收到后重新加载配置
+    this.configUpdatedOff = Events.On('configUpdated', () => {
+      console.log('收到 configUpdated 事件，重新加载配置')
+      this.loadConfig()
+    })
+
+    // 等待 Wails 运行时准备就绪（如需严格等待可取消注释）
+    // await this.waitForRuntime()
+    // await this.loadConfig()
     await this.updateNetworkStatus()
-    // 定期更新网络状态
-    setInterval(this.updateNetworkStatus, 5000)
+    // 监听后端发出的 configUpdated 事件，收到后重新加载配置
+    this.configUpdatedOff = Events.On('configUpdated', () => {
+      console.log('收到 configUpdated 事件，重新加载配置')
+      this.loadConfig()
+    })
+
+    // 监听窗口显示事件：刷新配置 + 网络状态，并启动定时器
+    this.windowShownOff = Events.On('windowShown', () => {
+      console.log('收到 windowShown 事件，刷新配置并启动网络状态定时器')
+      this.loadConfig()
+      this.updateNetworkStatus()
+      this.startNetworkStatusTimer()
+    })
+
+    // 监听窗口隐藏事件：停止定时器
+    this.windowHiddenOff = Events.On('windowHidden', () => {
+      console.log('收到 windowHidden 事件，停止网络状态定时器')
+      this.stopNetworkStatusTimer()
+    })
+
+    // 首次挂载时，立即刷新一次网络状态并启动定时器
+    await this.updateNetworkStatus()
+    this.startNetworkStatusTimer()
+  },
+  beforeUnmount() {
+    // 组件卸载时取消事件监听，避免内存泄漏
+    if (this.configUpdatedOff) {
+      this.configUpdatedOff()
+      this.configUpdatedOff = null
+    }
+    if (this.windowShownOff) {
+      this.windowShownOff()
+      this.windowShownOff = null
+    }
+    if (this.windowHiddenOff) {
+      this.windowHiddenOff()
+      this.windowHiddenOff = null
+    }
+    this.stopNetworkStatusTimer()
   },
   methods: {
     async waitForRuntime() {
@@ -154,15 +209,23 @@ export default {
       console.log('loadConfig')
       try {
         const result = await GetConfig()
-        if (result) {
-          this.config = result
-          console.log('loadConfig success', this.config)
+        console.log('GetConfig result:', result)
+        if (!result) {
+          console.warn('GetConfig 返回为空, 使用当前默认配置', this.config)
+          return
         }
+        // 合并后端返回的配置到本地 config, 避免响应式丢失
+        this.config = {
+          ...this.config,
+          ...result
+        }
+        console.log('loadConfig success', this.config)
       } catch (err) {
         console.error('加载配置失败:', err)
       }
     },
     async saveConfig() {
+      console.log('saveConfig', this.config)
       try {
         await UpdateConfig(this.config)
         alert('配置保存成功')
@@ -195,10 +258,24 @@ export default {
         this.switching = false
       }
     },
+    startNetworkStatusTimer() {
+      if (this.networkStatusTimer) {
+        clearInterval(this.networkStatusTimer)
+      }
+      this.networkStatusTimer = setInterval(this.updateNetworkStatus, 5000)
+    },
+    stopNetworkStatusTimer() {
+      if (this.networkStatusTimer) {
+        clearInterval(this.networkStatusTimer)
+        this.networkStatusTimer = null
+      }
+    },
     async updateNetworkStatus() {
+      console.log('updateNetworkStatus start', this.isConnectedToHome, this.isSideRouterReachable)
       try {
         this.isConnectedToHome = await IsConnectedToHomeNetwork()
         this.isSideRouterReachable = await IsSideRouterReachable()
+        console.log('updateNetworkStatus success', this.isConnectedToHome, this.isSideRouterReachable)
       } catch (err) {
         console.error('获取网络状态失败:', err)
       }
