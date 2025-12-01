@@ -43,6 +43,14 @@ export function Greet(name) {
 }
 
 /**
+ * HideWindow 隐藏窗口（由前端调用，用于拦截窗口关闭）
+ * @returns {$CancellablePromise<void>}
+ */
+export function HideWindow() {
+    return $Call.ByID(1124032883);
+}
+
+/**
  * IsConnectedToHomeNetwork 检查是否连接到家庭局域网
  * @returns {$CancellablePromise<boolean>}
  */
@@ -67,15 +75,6 @@ export function OpenLocationSettings() {
 }
 
 /**
- * SaveConfig 保存配置
- * @param {$models.Config | null} config
- * @returns {$CancellablePromise<void>}
- */
-export function SaveConfig(config) {
-    return $Call.ByID(1432885168, config);
-}
-
-/**
  * SwitchToAdaptive 切换到自适应IP模式
  * @returns {$CancellablePromise<void>}
  */
@@ -97,6 +96,15 @@ export function SwitchToDHCP() {
  */
 export function SwitchToStatic() {
     return $Call.ByID(643172);
+}
+
+/**
+ * UpdateConfig 保存配置 & 应用新配置
+ * @param {$models.Config | null} config
+ * @returns {$CancellablePromise<void>}
+ */
+export function UpdateConfig(config) {
+    return $Call.ByID(1599545108, config);
 }
 
 // Private type creation functions

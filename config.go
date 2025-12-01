@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -30,16 +30,32 @@ func LoadConfig() (*Config, error) {
 	
 	dir := filepath.Dir(exePath)
 	configPath := filepath.Join(dir, ConfigFileName)
+	log.Println("配置文件路径:", configPath)
+	
+	// 在开发模式下，如果可执行文件目录下没有配置文件，尝试从当前工作目录加载
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// 尝试从当前工作目录加载
+		wd, err := os.Getwd()
+		if err == nil {
+			wdConfigPath := filepath.Join(wd, ConfigFileName)
+			if _, err := os.Stat(wdConfigPath); err == nil {
+				configPath = wdConfigPath
+				log.Println("配置文件路径(wd):", wdConfigPath)
+			}
+		}
+	}
 	
 	// 检查配置文件是否存在
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		// 配置文件不存在，保存默认配置
-		SaveConfig(config)
+		if err := SaveConfig(config); err != nil {
+			log.Printf("保存默认配置失败: %v", err)
+		}
 		return config, nil
 	}
 
 	// 读取配置文件
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return config, nil // 返回默认配置
 	}
@@ -71,5 +87,5 @@ func SaveConfig(config *Config) error {
 	}
 
 	// 写入配置文件
-	return ioutil.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }

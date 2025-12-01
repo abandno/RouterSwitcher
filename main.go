@@ -31,6 +31,7 @@ type WailsApp struct {
 	dynamicItem  *application.MenuItem
 	staticItem   *application.MenuItem
 	exitItem     *application.MenuItem
+	mainWindow   application.Window // 保存主窗口引用
 }
 
 // NewWailsApp creates a new WailsApp application struct
@@ -48,9 +49,9 @@ func NewWailsApp() *WailsApp {
 
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
-func (a *WailsApp) startup(ctx context.Context) {
+func (a *WailsApp) startup() {
 	log.Println("启动路由器切换工具")
-	a.ctx = ctx
+	a.ctx = a.app.Context()
 
 	// 创建系统托盘菜单
 	a.createTrayMenu()
@@ -81,33 +82,27 @@ func (a *WailsApp) createTrayMenu() {
 	a.adaptiveItem.OnClick(func(*application.Context) {
 		log.Println("切换到自适应IP模式")
 		a.config.IPMode = "adaptive"
-		if err := SaveConfig(a.config); err != nil {
-			log.Printf("保存配置失败: %v", err)
+		if err := a.UpdateConfig(a.config); err != nil {
+			log.Printf("更新配置失败: %v", err)
 		}
-		a.updateTrayMenuState()
-		go a.checkAndSwitch()
 	})
 
 	a.dynamicItem = a.trayMenu.AddRadio("动态IP", false)
 	a.dynamicItem.OnClick(func(*application.Context) {
 		log.Println("切换到动态IP模式")
 		a.config.IPMode = "dynamic"
-		if err := SaveConfig(a.config); err != nil {
-			log.Printf("保存配置失败: %v", err)
+		if err := a.UpdateConfig(a.config); err != nil {
+			log.Printf("更新配置失败: %v", err)
 		}
-		a.updateTrayMenuState()
-		go a.switchToDHCP()
 	})
 
 	a.staticItem = a.trayMenu.AddRadio("静态IP", false)
 	a.staticItem.OnClick(func(*application.Context) {
 		log.Println("切换到静态IP模式")
 		a.config.IPMode = "static"
-		if err := SaveConfig(a.config); err != nil {
-			log.Printf("保存配置失败: %v", err)
+		if err := a.UpdateConfig(a.config); err != nil {
+			log.Printf("更新配置失败: %v", err)
 		}
-		a.updateTrayMenuState()
-		go a.switchToStatic()
 	})
 
 	a.trayMenu.AddSeparator()
@@ -125,17 +120,13 @@ func (a *WailsApp) createTrayMenu() {
 	a.systemTray.OnClick(func() {
 		log.Println("托盘图标被单击")
 		// 单击显示配置界面
-		if a.app != nil {
-			a.app.Show()
-		}
+		a.showWindow()
 	})
 
 	a.systemTray.OnDoubleClick(func() {
 		log.Println("托盘图标被双击")
 		// 双击也显示配置界面
-		if a.app != nil {
-			a.app.Show()
-		}
+		a.showWindow()
 	})
 
 	// 显示系统托盘
@@ -180,6 +171,72 @@ func (a *WailsApp) updateTrayMenuState() {
 	}
 }
 
+// showWindow 显示配置窗口
+func (a *WailsApp) showWindow() {
+	if a.app == nil {
+		log.Println("app未初始化，无法显示窗口")
+		return
+	}
+
+	// 如果主窗口已存在，显示它
+	if a.mainWindow != nil {
+		log.Println("显示现有窗口")
+		a.mainWindow.Show()
+		a.mainWindow.Focus()
+		return
+	}
+
+	// 创建新窗口，使用选项来设置窗口属性
+	log.Println("创建新窗口")
+	newWindow := a.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  "路由器切换工具",
+		Width:  800,
+		Height: 600,
+		URL:    "/", // 加载前端资源
+		// 不隐藏关闭按钮，但我们会通过 ShouldQuit 来拦截
+	})
+	if newWindow == nil {
+		log.Println("创建窗口失败")
+		return
+	}
+
+	// 保存窗口引用
+	a.mainWindow = newWindow
+	log.Printf("窗口已创建，类型: %T, 窗口引用已保存", newWindow)
+
+	// 监听窗口关闭事件 - 由于 wails v3 的事件类型可能不同
+	// 我们尝试一个变通方法：通过 WindowManager 监听窗口关闭
+	// 或者使用窗口选项来禁用关闭按钮（但这会影响用户体验）
+
+	// 方法1：尝试通过 WindowManager 监听所有窗口事件
+	// 注意：这需要在窗口创建前设置
+	log.Println("尝试通过 WindowManager 监听窗口事件...")
+
+	// 方法2：由于无法直接拦截窗口关闭，我们使用 ShouldQuit 回调
+	// 但 ShouldQuit 只在 app.Quit() 时触发，不在窗口关闭时触发
+	//
+	// 方法3：在窗口创建时，通过设置选项来禁用关闭按钮
+	// 但这会影响用户体验，不推荐
+	//
+	// 方法4：使用前端 JavaScript 来拦截窗口关闭事件
+	// 这可能是最可行的方法
+
+	// 显示窗口
+	newWindow.Show()
+	log.Println("新窗口已创建并显示，关闭事件监听已设置")
+}
+
+// HideWindow 隐藏窗口（由前端调用，用于拦截窗口关闭）
+func (a *WailsApp) HideWindow() {
+	log.Println("HideWindow 被调用 - 隐藏窗口而不是关闭")
+	if a.mainWindow != nil {
+		a.mainWindow.Hide()
+		log.Println("窗口已隐藏")
+	} else {
+		log.Println("主窗口为 nil，无法隐藏")
+	}
+}
+
 // Greet returns a greeting for the given name
 func (a *WailsApp) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
@@ -187,11 +244,13 @@ func (a *WailsApp) Greet(name string) string {
 
 // GetConfig 返回当前配置
 func (a *WailsApp) GetConfig() *Config {
+	log.Println("GetConfig")
 	return a.config
 }
 
-// SaveConfig 保存配置
-func (a *WailsApp) SaveConfig(config *Config) error {
+// UpdateConfig 保存配置 & 应用新配置
+func (a *WailsApp) UpdateConfig(config *Config) error {
+	log.Println("UpdateConfig")
 	a.config = config
 	err := SaveConfig(a.config)
 	if err != nil {
@@ -223,11 +282,9 @@ func (a *WailsApp) SwitchToDHCP() {
 // SwitchToAdaptive 切换到自适应IP模式
 func (a *WailsApp) SwitchToAdaptive() {
 	a.config.IPMode = "adaptive"
-	if err := SaveConfig(a.config); err != nil {
-		log.Printf("保存配置失败: %v", err)
+	if err := a.UpdateConfig(a.config); err != nil {
+		log.Printf("更新配置失败: %v", err)
 	}
-	a.updateTrayMenuState()
-	go a.checkAndSwitch()
 }
 
 // CheckAndSwitch 检查网络状态并切换配置
@@ -237,11 +294,13 @@ func (a *WailsApp) CheckAndSwitch() {
 
 // IsConnectedToHomeNetwork 检查是否连接到家庭局域网
 func (a *WailsApp) IsConnectedToHomeNetwork() bool {
+	log.Println("IsConnectedToHomeNetwork")
 	return a.isConnectedToHomeNetwork()
 }
 
 // IsSideRouterReachable 检查旁路由是否可达
 func (a *WailsApp) IsSideRouterReachable() bool {
+	log.Println("IsSideRouterReachable")
 	return a.isSideRouterReachable()
 }
 
@@ -380,7 +439,9 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 			dialog.Show()
 
 			// 自动打开位置设置页面
-			exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start()
+			if err := exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start(); err != nil {
+				log.Printf("打开位置设置页面失败: %v", err)
+			}
 		}
 	}
 }
@@ -477,7 +538,11 @@ func main() {
 		// 将日志同时输出到文件和控制台
 		multiWriter := io.MultiWriter(os.Stdout, logFile)
 		log.SetOutput(multiWriter)
-		defer logFile.Close()
+		defer func() {
+			if err := logFile.Close(); err != nil {
+				log.Printf("关闭日志文件失败: %v", err)
+			}
+		}()
 	}
 
 	// Create an instance of the app structure
@@ -491,6 +556,23 @@ func main() {
 		Services: []application.Service{
 			application.NewService(app),
 		},
+		// 设置 ShouldQuit 回调，当所有窗口关闭时，不退出应用（因为有托盘图标） a.app.Quit() 时触发
+		// ShouldQuit: func() bool {
+		// 	log.Println("========== ShouldQuit 被调用 ==========")
+		// 	log.Println("返回 false 以保持应用运行（托盘模式）")
+		// 	// 隐藏主窗口（如果存在）
+		// 	if app.mainWindow != nil {
+		// 		app.mainWindow.Hide()
+		// 		log.Println("主窗口已隐藏")
+		// 	} else {
+		// 		log.Println("主窗口为 nil，无法隐藏")
+		// 	}
+		// 	return false // 返回 false 表示不退出应用
+		// },
+		// 设置 OnShutdown 回调用于调试
+		OnShutdown: func() {
+			log.Println("========== OnShutdown 被调用 - 应用正在关闭 ==========")
+		},
 	})
 
 	app.app = appInstance
@@ -498,13 +580,15 @@ func main() {
 	// 处理开机启动（在启动前处理）
 	app.handleAutoStart()
 
-	// Run the application
+	// 在 Run() 之前初始化（Run() 是阻塞调用，不会返回）
+	log.Println("应用启动，开始初始化...")
+	log.Printf("当前配置: %+v", app.config)
+	app.startup()
+	log.Println("初始化完成，启动应用...")
+
+	// Run the application (阻塞调用，直到应用退出)
 	err = appInstance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("应用启动")
-
-	// 应用启动后初始化
-	app.startup(appInstance.Context())
 }

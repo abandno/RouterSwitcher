@@ -109,7 +109,7 @@
 </template>
 
 <script>
-import { GetConfig, SaveConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable } from '../../wailsjs/go/main/WailsApp'
+import { GetConfig, UpdateConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable } from '../../bindings/RouterSwitcher/wailsapp'
 
 export default {
   name: 'ConfigManager',
@@ -129,22 +129,42 @@ export default {
     }
   },
   async mounted() {
+    // 等待 Wails 运行时准备就绪
+    await this.waitForRuntime()
     await this.loadConfig()
     await this.updateNetworkStatus()
     // 定期更新网络状态
     setInterval(this.updateNetworkStatus, 5000)
   },
   methods: {
+    async waitForRuntime() {
+      // 等待 Wails 运行时初始化
+      return new Promise((resolve) => {
+        const checkRuntime = () => {
+          if (window.runtime || (window.go && window.go.main && window.go.main.WailsApp)) {
+            resolve()
+          } else {
+            setTimeout(checkRuntime, 50)
+          }
+        }
+        checkRuntime()
+      })
+    },
     async loadConfig() {
+      console.log('loadConfig')
       try {
-        this.config = await GetConfig()
+        const result = await GetConfig()
+        if (result) {
+          this.config = result
+          console.log('loadConfig success', this.config)
+        }
       } catch (err) {
         console.error('加载配置失败:', err)
       }
     },
     async saveConfig() {
       try {
-        await SaveConfig(this.config)
+        await UpdateConfig(this.config)
         alert('配置保存成功')
       } catch (err) {
         console.error('保存配置失败:', err)
