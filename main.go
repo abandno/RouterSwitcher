@@ -56,6 +56,9 @@ func (a *WailsApp) startup() {
 	// 创建系统托盘菜单
 	a.createTrayMenu()
 
+	// 处理开机启动（在启动前处理）
+	a.handleAutoStart()
+
 	// 启动网络监控
 	go a.monitorNetwork()
 }
@@ -129,7 +132,21 @@ func (a *WailsApp) createTrayMenu() {
 		}
 
 		// 主窗口已存在时，点击托盘图标在 显示/隐藏 之间切换
-		if a.mainWindow.IsVisible() {
+		// 使用错误处理来检测窗口是否仍然有效
+		isVisible := false
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("检查窗口可见性时发生错误，窗口可能已被关闭: %v", r)
+					isVisible = false
+					// 窗口无效，清除引用
+					a.mainWindow = nil
+				}
+			}()
+			isVisible = a.mainWindow.IsVisible()
+		}()
+
+		if isVisible {
 			log.Println("主窗口可见，隐藏窗口")
 			a.mainWindow.Hide()
 			// 通知前端窗口已隐藏
@@ -138,12 +155,7 @@ func (a *WailsApp) createTrayMenu() {
 			}
 		} else {
 			log.Println("主窗口不可见，显示窗口")
-			a.mainWindow.Show()
-			a.mainWindow.Focus()
-			// 通知前端窗口已显示
-			if a.app != nil && a.app.Event != nil {
-				go a.app.Event.Emit("windowShown")
-			}
+			a.showWindow()
 		}
 	})
 
@@ -204,16 +216,62 @@ func (a *WailsApp) showWindow() {
 		return
 	}
 
-	// 如果主窗口已存在，显示它
+	// 如果主窗口已存在，尝试显示它
 	if a.mainWindow != nil {
 		log.Println("显示现有窗口")
-		a.mainWindow.Show()
-		a.mainWindow.Focus()
-		// 通知前端窗口已显示
-		if a.app != nil && a.app.Event != nil {
-			go a.app.Event.Emit("windowShown")
+		// 检查窗口是否仍然有效
+		// 如果窗口已关闭（不是隐藏），WebView2 可能已被销毁
+		// 我们通过尝试显示窗口并检查状态来判断
+		shouldRecreate := false
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("检查窗口状态时发生 panic，窗口可能已被关闭: %v", r)
+					shouldRecreate = true
+				}
+			}()
+
+			// 尝试显示窗口
+			a.mainWindow.Show()
+
+			// 等待一小段时间让窗口显示
+			time.Sleep(100 * time.Millisecond)
+
+			// 检查窗口是否真的可见
+			// 如果窗口已关闭，IsVisible() 可能会 panic 或返回 false
+			if !a.mainWindow.IsVisible() {
+				log.Println("窗口显示后仍不可见，可能已被关闭")
+				shouldRecreate = true
+				return
+			}
+
+			// 窗口可见，尝试聚焦（如果失败，只会在日志中记录错误，不会影响程序）
+			// 使用 goroutine 延迟执行，避免阻塞
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("聚焦窗口时发生错误: %v（窗口可能已关闭，将在下次显示时重建）", r)
+					}
+				}()
+				time.Sleep(50 * time.Millisecond)
+				if a.mainWindow != nil {
+					a.mainWindow.Focus()
+				}
+			}()
+		}()
+
+		// 如果窗口有效，通知前端并返回
+		if !shouldRecreate {
+			// 通知前端窗口已显示
+			if a.app != nil && a.app.Event != nil {
+				go a.app.Event.Emit("windowShown")
+			}
+			return
+		} else {
+			// 窗口无效，清除引用并重新创建
+			log.Println("窗口无效或被关闭，清除引用并重新创建")
+			a.mainWindow = nil
 		}
-		return
 	}
 
 	// 创建新窗口，使用选项来设置窗口属性
@@ -223,7 +281,8 @@ func (a *WailsApp) showWindow() {
 		Width:  800,
 		Height: 600,
 		URL:    "/", // 加载前端资源
-		// 不隐藏关闭按钮，但我们会通过 ShouldQuit 来拦截
+		// 注意：Wails v3 中窗口关闭事件通过前端 beforeunload 事件拦截
+		// 前端会调用 HideWindow() 方法来隐藏窗口
 	})
 	if newWindow == nil {
 		log.Println("创建窗口失败")
@@ -234,22 +293,9 @@ func (a *WailsApp) showWindow() {
 	a.mainWindow = newWindow
 	log.Printf("窗口已创建，类型: %T, 窗口引用已保存", newWindow)
 
-	// 监听窗口关闭事件 - 由于 wails v3 的事件类型可能不同
-	// 我们尝试一个变通方法：通过 WindowManager 监听窗口关闭
-	// 或者使用窗口选项来禁用关闭按钮（但这会影响用户体验）
-
-	// 方法1：尝试通过 WindowManager 监听所有窗口事件
-	// 注意：这需要在窗口创建前设置
-	log.Println("尝试通过 WindowManager 监听窗口事件...")
-
-	// 方法2：由于无法直接拦截窗口关闭，我们使用 ShouldQuit 回调
-	// 但 ShouldQuit 只在 app.Quit() 时触发，不在窗口关闭时触发
-	//
-	// 方法3：在窗口创建时，通过设置选项来禁用关闭按钮
-	// 但这会影响用户体验，不推荐
-	//
-	// 方法4：使用前端 JavaScript 来拦截窗口关闭事件
-	// 这可能是最可行的方法
+	// 注意：在 Wails v3 中，当 DisableQuitOnLastWindowClosed 为 true 时，
+	// 窗口关闭后 WebView2 控件会被销毁，但窗口对象可能仍然存在。
+	// 我们通过 showWindow 中的错误检测来处理这种情况。
 
 	// 显示窗口
 	newWindow.Show()
@@ -603,6 +649,9 @@ func main() {
 		Services: []application.Service{
 			application.NewService(app),
 		},
+		Windows: application.WindowsOptions{
+			DisableQuitOnLastWindowClosed: true, // 可实现关闭窗口应用不退出
+		},
 		// 设置 ShouldQuit 回调，当所有窗口关闭时，不退出应用（因为有托盘图标） a.app.Quit() 时触发
 		// ShouldQuit: func() bool {
 		// 	log.Println("========== ShouldQuit 被调用 ==========")
@@ -623,9 +672,6 @@ func main() {
 	})
 
 	app.app = appInstance
-
-	// 处理开机启动（在启动前处理）
-	app.handleAutoStart()
 
 	// 在 Run() 之前初始化（Run() 是阻塞调用，不会返回）
 	log.Println("应用启动，开始初始化...")

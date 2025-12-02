@@ -48,33 +48,20 @@ const app = createApp(ConfigManager);
 app.mount('#app');
 
 // 拦截窗口关闭事件，隐藏窗口而不是关闭
+// 在 Wails v3 中，通过 beforeunload 事件拦截窗口关闭
 window.addEventListener('beforeunload', async function (e) {
-    console.log('beforeunload')
-    // 使用 runtime API 直接调用后端 HideWindow 方法
-    // 这样可以避免导入绑定文件的依赖问题
-    try {
-        // if (window.runtime && window.runtime.go && window.runtime.go.main && window.runtime.go.main.WailsApp) {
-        //     const hideWindowPromise = window.runtime.go.main.WailsApp.HideWindow();
-        //     if (hideWindowPromise && typeof hideWindowPromise.catch === 'function') {
-        //         hideWindowPromise.catch(err => {
-        //             console.error('隐藏窗口失败:', err);
-        //         });
-        //     }
-        // } else {
-        //     console.warn('无法访问 runtime API');
-        // }
-        try {
-            await HideWindow()
-            alert('隐藏窗口成功')
-        } catch (err) {
-            console.error('隐藏窗口失败:', err)
-            alert('隐藏窗口失败: ' + err)
-        }
-    } catch (err) {
-        console.error('调用 HideWindow 失败:', err);
-    }
+    console.log('beforeunload 事件触发 - 拦截窗口关闭，改为隐藏')
     // 阻止默认的关闭行为
     e.preventDefault();
     e.returnValue = ''; // Chrome 需要这个
+    
+    // 调用 Go 端的 HideWindow 方法隐藏窗口
+    try {
+        await HideWindow()
+        console.log('窗口已隐藏')
+    } catch (err) {
+        console.error('调用 HideWindow 失败:', err);
+    }
+    
     return ''; // 某些浏览器需要返回值
 });
