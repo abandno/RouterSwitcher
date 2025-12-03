@@ -51,7 +51,11 @@
           type="text" 
           v-model="config.HomeSSID"
           placeholder="输入局域网WiFi名称"
+          :class="{ 'invalid': validationErrors.includes('ssid') }"
         >
+        <div v-if="validationErrors.includes('ssid')" class="error-message">
+          SSID不能为空
+        </div>
       </div>
 
       <!-- 其他表单项保持不变 -->
@@ -63,7 +67,11 @@
           <IpInput
             id="staticIP"
             v-model="config.StaticIP"
+            :class="{ 'invalid': validationErrors.includes('staticIP') }"
           />
+          <div v-if="validationErrors.includes('staticIP')" class="error-message">
+            IP地址不能为空
+          </div>
         </div>
         
         <div class="form-group">
@@ -71,7 +79,12 @@
           <IpInput
             id="gateway"
             v-model="config.Gateway"
+            :class="{ 'invalid': validationErrors.includes('gateway') }"
           />
+          <div v-if="validationErrors.includes('gateway')" class="error-message">
+            网关不能为空
+          </div>
+
         </div>
         
         <div class="form-group">
@@ -79,7 +92,11 @@
           <IpInput
             id="dns"
             v-model="config.DNS"
+            :class="{ 'invalid': validationErrors.includes('dns') }"
           />
+          <div v-if="validationErrors.includes('dns')" class="error-message">
+            DNS不能为空
+          </div>
         </div>
       </fieldset>
 
@@ -110,6 +127,7 @@
 import IpInput from './IpInput.vue'
 import { GetConfig, UpdateConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable } from '../../bindings/RouterSwitcher/wailsapp'
 import { Events } from '@wailsio/runtime'
+import { isValidIp } from '../utils';
 
 export default {
   name: 'ConfigManager',
@@ -132,14 +150,24 @@ export default {
       configUpdatedOff: null,
       windowShownOff: null,
       windowHiddenOff: null,
-      networkStatusTimer: null
+      networkStatusTimer: null,
+      validationErrors: [] // 用于存储验证错误信息
+    }
+  },
+  watch: {
+    // 监听config变化，实时验证表单
+    config: {
+      handler() {
+        this.validateForm();
+      },
+      deep: true
     }
   },
   async mounted() {
     setTimeout(async () => {
       console.log('==mounted', this.config)
       await this.loadConfig()
-    }, 1 * 1000)
+    }, 200)
     // setInterval(async () => {
     //   await this.loadConfig()
     // }, 5 * 1000)
@@ -226,8 +254,52 @@ export default {
         console.error('加载配置失败:', err)
       }
     },
+    validateForm() {
+      // 清空之前的验证错误
+      this.validationErrors = [];
+      
+      // 根据需求文档进行验证：
+      // 1. 自适应时，SSID 和 静态IP配置区域 必填
+      // 2. 静态IP时，静态IP配置区域 必填
+      
+      let requiredStaticIpConf = false
+      if (this.config.IPMode === 'adaptive') {
+        // 检查SSID是否为空
+        if (!this.config.HomeSSID.trim()) {
+          this.validationErrors.push('ssid');
+        }
+        requiredStaticIpConf = true
+      } else if (this.config.IPMode === 'static') {
+        requiredStaticIpConf = true
+      }
+
+      if (requiredStaticIpConf) {
+        // 检查静态IP配置是否为空
+        if (!isValidIp(this.config.StaticIP)) {
+          this.validationErrors.push('staticIP');
+        }
+        if (!isValidIp(this.config.Gateway)) {
+          this.validationErrors.push('gateway');
+        }
+        if (!isValidIp(this.config.DNS)) {
+          this.validationErrors.push('dns');
+        }
+      }
+      // console.log("this.validationErrors", this.validationErrors);
+      
+      // 返回验证是否通过
+      return this.validationErrors.length === 0;
+    },
     async saveConfig() {
-      console.log('saveConfig', this.config)
+      console.log('saveConfig', this.config);
+      
+      // 执行表单验证
+      if (!this.validateForm()) {
+        // 如果验证失败，显示错误信息并阻止提交
+        alert('表单验证失败，请检查必填项');
+        return;
+      }
+      
       try {
         await UpdateConfig(this.config)
         alert('配置保存成功')
@@ -273,11 +345,11 @@ export default {
       }
     },
     async updateNetworkStatus() {
-      console.log('updateNetworkStatus start', this.isConnectedToHome, this.isSideRouterReachable)
+      // console.log('updateNetworkStatus start', this.isConnectedToHome, this.isSideRouterReachable)
       try {
         this.isConnectedToHome = await IsConnectedToHomeNetwork()
         this.isSideRouterReachable = await IsSideRouterReachable()
-        console.log('updateNetworkStatus success', this.isConnectedToHome, this.isSideRouterReachable)
+        // console.log('updateNetworkStatus success', this.isConnectedToHome, this.isSideRouterReachable)
       } catch (err) {
         console.error('获取网络状态失败:', err)
       }
@@ -346,85 +418,6 @@ legend {
   margin: 0;
 }
 
-.buttons {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.buttons button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  background-color: #007bff;
-  color: white;
-}
-
-.buttons button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.buttons button[type="submit"] {
-  background-color: #28a745;
-}
-
-.status {
-  margin-top: 30px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  border: 1px solid #e9ecef;
-}
-
-.status h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  color: #343a40;
-  font-size: 1.1em;
-}
-
-.status ul {
-  margin: 0;
-  padding-left: 0;
-  list-style: none;
-}
-
-.status li {
-  padding: 8px 0;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  justify-content: space-between;
-}
-
-.status li:last-child {
-  border-bottom: none;
-}
-
-.status .label {
-  font-weight: 500;
-  color: #495057;
-}
-
-.status .value {
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.status .value.yes {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.status .value.no {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
 .form-item-block {
   margin-top: 15px;
   margin-bottom: 15px;
@@ -466,6 +459,36 @@ legend {
   box-sizing: border-box;
 }
 
+.form-item-block input[type="text"]:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* 错误状态样式 */
+.form-item-block input[type="text"].invalid,
+.form-item-block input[type="password"].invalid {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+}
+
+.form-item-block input[type="text"].invalid:focus,
+.form-item-block input[type="password"].invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+}
+
+/* fieldset 错误状态样式 */
+fieldset.invalid {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+}
+
+fieldset legend {
+  font-weight: bold;
+  padding: 0 5px;
+}
+
 .form-item-block .radio-group {
   display: flex;
   gap: 15px;
@@ -473,5 +496,88 @@ legend {
   border: none;
   padding: 0;
   margin: 0;
+}
+
+.buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.buttons button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.buttons button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.buttons button:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 30px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+}
+
+.status h3 {
+  margin-top: 0;
+}
+
+.status ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.status li {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.status li:last-child {
+  border-bottom: none;
+}
+
+.status .label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.status .value {
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status .value.yes {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status .value.no {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* 错误消息样式 */
+.error-message {
+  color: #dc3545;
+  font-size: 14px;
+  margin-top: 5px;
 }
 </style>

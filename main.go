@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -654,6 +653,11 @@ func (a *WailsApp) handleAutoStart() {
 }
 
 func main() {
+	// 禁用日志输出
+	log.SetOutput(io.Discard)
+	
+	// 注释掉原有的日志设置代码
+	/*
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// 创建日志文件
 	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -669,6 +673,7 @@ func main() {
 			}
 		}()
 	}
+	*/
 
 	// Create an instance of the app structure
 	app := NewWailsApp()
@@ -712,7 +717,7 @@ func main() {
 	log.Println("初始化完成，启动应用...")
 
 	// Run the application (阻塞调用，直到应用退出)
-	err = appInstance.Run()
+	err := appInstance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

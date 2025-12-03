@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [vue(), wails("./bindings")],
   build: {
     rollupOptions: {
-      external: ['@wailsio/runtime'],
+      // external: ['@wailsio/runtime'],
       output: {
         entryFileNames: `assets/[name].js`,
         chunkFileNames: `assets/[name].js`,

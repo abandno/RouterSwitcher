@@ -67,7 +67,6 @@ export default {
     },
     onInput(event, index) {
       const raw = event.target.value
-      console.log('==onInput raw', raw)
       const normalized = this.normalizePart(raw)
       // Vue 3 中数组是响应式的，可以直接通过下标赋值
       this.parts[index] = normalized
@@ -79,7 +78,6 @@ export default {
       }
     },
     onKeydown(event, index) {
-      console.log("onKeydown", event)
       const key = event.key
 
       // 允许 Tab 的默认行为，让浏览器在子输入框之间顺序切换
