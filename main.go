@@ -20,6 +20,19 @@ var assets embed.FS
 //go:embed build/windows/icon.ico
 var icon []byte
 
+// 根据需求文档定义不同颜色的图标
+// 自适应IP - 紫色图标
+//go:embed icon/purple.png
+var purpleIcon []byte
+
+// 动态IP - 红色图标
+//go:embed icon/red.png
+var redIcon []byte
+
+// 静态IP - 蓝色图标
+//go:embed icon/blue.png
+var blueIcon []byte
+
 // WailsApp struct
 type WailsApp struct {
 	ctx          context.Context
@@ -74,9 +87,22 @@ func (a *WailsApp) createTrayMenu() {
 
 	// 创建系统托盘
 	a.systemTray = a.app.SystemTray.New()
-	a.systemTray.SetIcon(icon)
+
+	// ========== 初始化托盘图标 ==========
+	// 根据当前IP模式设置初始图标
+	switch a.config.IPMode {
+	case "adaptive":
+		a.systemTray.SetIcon(purpleIcon)
+	case "dynamic":
+		a.systemTray.SetIcon(redIcon)
+	case "static":
+		a.systemTray.SetIcon(blueIcon)
+	default:
+		a.systemTray.SetIcon(icon)
+	}
 	a.systemTray.SetTooltip("路由器切换工具")
 
+	// ========== 创建托盘菜单 ==========
 	// 创建菜单
 	a.trayMenu = application.NewMenu()
 
@@ -175,30 +201,36 @@ func (a *WailsApp) createTrayMenu() {
 // updateTrayMenuState 更新托盘菜单状态（根据当前IP模式设置勾选状态）
 func (a *WailsApp) updateTrayMenuState() {
 	log.Println("updateTrayMenuState", a.config.IPMode)
-	// 清除所有勾选状态
-	if a.adaptiveItem != nil {
-		a.adaptiveItem.SetChecked(false)
-	}
-	if a.dynamicItem != nil {
-		a.dynamicItem.SetChecked(false)
-	}
-	if a.staticItem != nil {
-		a.staticItem.SetChecked(false)
+
+	// 先清除所有勾选状态
+	for _, item := range []*application.MenuItem{a.adaptiveItem, a.dynamicItem, a.staticItem} {
+		if item != nil {
+			item.SetChecked(false)
+		}
 	}
 
-	// 根据当前模式设置勾选状态
+	// 根据当前模式设置勾选状态和图标
 	switch a.config.IPMode {
 	case "adaptive":
 		if a.adaptiveItem != nil {
 			a.adaptiveItem.SetChecked(true)
 		}
+		if a.systemTray != nil {
+			a.systemTray.SetIcon(purpleIcon)
+		}
 	case "dynamic":
 		if a.dynamicItem != nil {
 			a.dynamicItem.SetChecked(true)
 		}
+		if a.systemTray != nil {
+			a.systemTray.SetIcon(redIcon)
+		}
 	case "static":
 		if a.staticItem != nil {
 			a.staticItem.SetChecked(true)
+		}
+		if a.systemTray != nil {
+			a.systemTray.SetIcon(blueIcon)
 		}
 	}
 
