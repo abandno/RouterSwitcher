@@ -17,7 +17,7 @@
       <div class="form-item-block ip-mode">
         <label>IP模式:</label>
         <div class="radio-group">
-          <label class="radio-label">
+          <label class="radio-label" title="自动识别当前网络环境，在DHCP（动态）和静态IP之间切换">
             <input 
               type="radio" 
               v-model="config.IPMode" 
@@ -25,7 +25,7 @@
             >
             自适应
           </label>
-          <label class="radio-label">
+          <label class="radio-label" title="DHCP模式，IP自动分配">
             <input 
               type="radio" 
               v-model="config.IPMode" 
@@ -33,7 +33,7 @@
             >
             动态IP
           </label>
-          <label class="radio-label">
+          <label class="radio-label" title="将固定使用您下面配置IP">
             <input 
               type="radio" 
               v-model="config.IPMode" 
@@ -50,6 +50,7 @@
           id="homeSSID" 
           type="text" 
           v-model="config.HomeSSID"
+          placeholder="输入局域网WiFi名称"
         >
       </div>
 
@@ -59,29 +60,26 @@
         
         <div class="form-group">
           <label for="staticIP">IP地址:</label>
-          <input 
-            id="staticIP" 
-            type="text" 
+          <IpInput
+            id="staticIP"
             v-model="config.StaticIP"
-          >
+          />
         </div>
         
         <div class="form-group">
           <label for="gateway">默认网关:</label>
-          <input 
-            id="gateway" 
-            type="text" 
+          <IpInput
+            id="gateway"
             v-model="config.Gateway"
-          >
+          />
         </div>
         
         <div class="form-group">
           <label for="dns">DNS:</label>
-          <input 
-            id="dns" 
-            type="text" 
+          <IpInput
+            id="dns"
             v-model="config.DNS"
-          >
+          />
         </div>
       </fieldset>
 
@@ -109,11 +107,15 @@
 </template>
 
 <script>
+import IpInput from './IpInput.vue'
 import { GetConfig, UpdateConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable } from '../../bindings/RouterSwitcher/wailsapp'
 import { Events } from '@wailsio/runtime'
 
 export default {
   name: 'ConfigManager',
+  components: {
+    IpInput
+  },
   data() {
     return {
       config: {
@@ -287,8 +289,10 @@ export default {
 <style scoped>
 .config-manager {
   max-width: 600px;
+  width: 100%;
   margin: 0 auto;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 .form-group {
@@ -315,6 +319,8 @@ fieldset {
   border-radius: 4px;
   margin-bottom: 20px;
   padding: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 legend {
