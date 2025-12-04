@@ -310,7 +310,7 @@ func (a *WailsApp) showWindow() {
 	newWindow := a.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:  "路由器切换工具",
 		Width:  800,
-		Height: 600,
+		Height: 640,
 		URL:    "/", // 加载前端资源
 		// 注意：Wails v3 中窗口关闭事件通过前端 beforeunload 事件拦截
 		// 前端会调用 HideWindow() 方法来隐藏窗口
@@ -431,6 +431,7 @@ func (a *WailsApp) IsSideRouterReachable() bool {
 // OpenLocationSettings 打开位置设置页面
 func (a *WailsApp) OpenLocationSettings() error {
 	cmd := exec.Command("cmd", "/C", "start", "ms-settings:privacy-location")
+	hideCmdWindow(cmd)
 	return cmd.Start()
 }
 
@@ -469,6 +470,7 @@ func (a *WailsApp) checkAndSwitch() {
 func (a *WailsApp) isConnectedToHomeNetwork() bool {
 	// 执行命令获取当前WiFi信息
 	cmd := exec.Command("netsh", "wlan", "show", "interfaces")
+	hideCmdWindow(cmd)
 	output, err := cmd.Output()
 	if err != nil {
 		outputStr := string(output)
@@ -563,7 +565,9 @@ func (a *WailsApp) promptUserToEnableLocationService() {
 			dialog.Show()
 
 			// 自动打开位置设置页面
-			if err := exec.Command("cmd", "/C", "start", "ms-settings:privacy-location").Start(); err != nil {
+			cmd := exec.Command("cmd", "/C", "start", "ms-settings:privacy-location")
+			hideCmdWindow(cmd)
+			if err := cmd.Start(); err != nil {
 				log.Printf("打开位置设置页面失败: %v", err)
 			}
 		}

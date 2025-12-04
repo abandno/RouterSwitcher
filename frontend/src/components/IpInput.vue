@@ -2,7 +2,9 @@
   <div class="ip-input">
     <div v-for="(part, index) in parts" :key="index" ref="inputGroup" class="ip-input-part-box">
       <input ref="inputs" type="text" inputmode="numeric" maxlength="3" class="ip-input-part" v-model="parts[index]"
-        @input="onInput($event, index)" @keydown="onKeydown($event, index)" />
+        @input="onInput($event, index)" 
+        @keydown="onKeydown($event, index)" 
+        @paste="onPaste($event, index)" />
       <span v-if="index < 3" :key="'dot-' + index" class="ip-input-dot">·</span>
     </div>
   </div>
@@ -107,9 +109,56 @@ export default {
         return
       }
 
-      // 屏蔽非数字字符（保留控制键）
-      if (!/[0-9]/.test(key) && key.length === 1) {
-        event.preventDefault()
+      // 屏蔽非数字字符（保留控制键） -- 这里不要阻止, 会附带阻止 Ctrl+C,Ctrl+V等快捷键
+      // if (!/[0-9]/.test(key) && key.length === 1) {
+      //   event.preventDefault()
+      // }
+    },
+    onPaste(event, index) {
+      // 阻止默认粘贴行为
+      event.preventDefault();
+      
+      // 获取剪贴板数据
+      const clipboardData = event.clipboardData || window.clipboardData;
+      const pastedData = clipboardData.getData('text');
+      
+      // 检查是否是IP地址格式
+      const ipPattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+      const match = pastedData.match(ipPattern);
+      
+      if (match) {
+        // 验证每个部分是否在有效范围内
+        const ipParts = match.slice(1).map(part => {
+          const num = parseInt(part, 10);
+          return num >= 0 && num <= 255 ? part : '';
+        });
+        
+        // 如果所有部分都有效，则填充到各个输入框
+        if (ipParts.every(part => part !== '')) {
+          for (let i = 0; i < 4; i++) {
+            this.parts[i] = ipParts[i];
+          }
+          this.emitValue();
+          // 聚焦到最后一个输入框
+          this.$nextTick(() => {
+            const lastInput = this.$refs.inputs[3];
+            if (lastInput) {
+              lastInput.focus();
+              lastInput.select();
+            }
+          });
+          return;
+        }
+      }
+      
+      // 如果不是有效的IP地址，按原来的方式处理每个字符
+      const normalized = this.normalizePart(pastedData);
+      this.parts[index] = normalized;
+      this.emitValue();
+      
+      // 如果当前部分已满3位数字且不是最后一个输入框，则聚焦到下一个输入框
+      if (normalized.length === 3 && index < 3) {
+        this.focusNext(index);
       }
     }
   }
@@ -138,6 +187,8 @@ export default {
   text-align: center;
   font-size: 13px;
   box-sizing: border-box;
+  font-weight: bold;
+  font-size: 16px;
 }
 
 .ip-input-part:focus {

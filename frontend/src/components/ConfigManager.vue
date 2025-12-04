@@ -52,6 +52,7 @@
           v-model="config.HomeSSID"
           placeholder="输入局域网WiFi名称"
           :class="{ 'invalid': validationErrors.includes('ssid') }"
+          style="font-weight: bold; font-size: 16px;"
         >
         <div v-if="validationErrors.includes('ssid')" class="error-message">
           SSID不能为空
@@ -115,7 +116,7 @@
           <span :class="['value', isConnectedToHome ? 'yes' : 'no']">{{ isConnectedToHome ? '是' : '否' }}</span>
         </li>
         <li>
-          <span class="label">旁路由是否可达:</span>
+          <span class="label">默认网关是否可达:</span>
           <span :class="['value', isSideRouterReachable ? 'yes' : 'no']">{{ isSideRouterReachable ? '是' : '否' }}</span>
         </li>
       </ul>
@@ -530,6 +531,7 @@ fieldset legend {
   border: 1px solid #ddd;
   border-radius: 4px;
   background-color: #f8f9fa;
+  color: gray;
 }
 
 .status h3 {

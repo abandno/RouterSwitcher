@@ -10,13 +10,14 @@ import (
 func GetActiveInterface() (string, error) {
 	// 使用netsh命令获取网络接口信息
 	cmd := exec.Command("netsh", "interface", "show", "interface")
+	hideCmdWindow(cmd)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
 
-	lines := strings.Split(string(output), LRLF)
-		for _, line := range lines {
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
 		// 查找已连接的网络接口 (支持中英文环境)
 		if (strings.Contains(line, "Connected") || strings.Contains(line, "已连接")) && 
 		   (strings.Contains(line, "Dedicated") || strings.Contains(line, "专用")) {
@@ -34,6 +35,7 @@ func GetActiveInterface() (string, error) {
 func GetCurrentIPConfig(iface string) (isDHCP bool, err error) {
 	// 使用netsh命令获取接口IP配置
 	cmd := exec.Command("netsh", "interface", "ip", "show", "config", iface)
+	hideCmdWindow(cmd)
 	output, err := cmd.Output()
 	if err != nil {
 		return false, err
@@ -42,7 +44,7 @@ func GetCurrentIPConfig(iface string) (isDHCP bool, err error) {
 	// 检查输出中是否包含DHCP相关信息
 	outputStr := string(output)
 	if strings.Contains(outputStr, "DHCP enabled") || strings.Contains(outputStr, "DHCP 已启用") {
-		lines := strings.Split(outputStr, LRLF)
+		lines := strings.Split(outputStr, "\n")
 		for _, line := range lines {
 			if strings.Contains(line, "DHCP enabled") || strings.Contains(line, "DHCP 已启用") {
 				if strings.Contains(line, "Yes") || strings.Contains(line, "是") {
@@ -60,6 +62,7 @@ func GetCurrentIPConfig(iface string) (isDHCP bool, err error) {
 func GetCurrentStaticIPConfig(iface, staticIP, gateway, dns string) (isStatic bool, err error) {
 	// 使用netsh命令获取接口IP配置
 	cmd := exec.Command("netsh", "interface", "ip", "show", "config", iface)
+	hideCmdWindow(cmd)
 	output, err := cmd.Output()
 	if err != nil {
 		return false, err
@@ -89,6 +92,7 @@ func GetCurrentStaticIPConfig(iface, staticIP, gateway, dns string) (isStatic bo
 func SetDHCP(iface string) error {
 	// 设置为DHCP自动获取IP
 	cmd := exec.Command("netsh", "interface", "ip", "set", "address", iface, "dhcp")
+	hideCmdWindow(cmd)
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("设置DHCP IP失败: %v", err)
@@ -96,6 +100,7 @@ func SetDHCP(iface string) error {
 
 	// 设置DNS为自动获取
 	cmd = exec.Command("netsh", "interface", "ip", "set", "dns", iface, "dhcp")
+	hideCmdWindow(cmd)
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("设置DHCP DNS失败: %v", err)
@@ -108,6 +113,7 @@ func SetDHCP(iface string) error {
 func SetStaticIP(iface, ip, subnetMask, gateway, dns string) error {
 	// 设置静态IP地址、子网掩码和网关
 	cmd := exec.Command("netsh", "interface", "ip", "set", "address", iface, "static", ip, subnetMask, gateway)
+	hideCmdWindow(cmd)
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("设置静态IP失败: %v", err)
@@ -115,6 +121,7 @@ func SetStaticIP(iface, ip, subnetMask, gateway, dns string) error {
 
 	// 设置静态DNS服务器
 	cmd = exec.Command("netsh", "interface", "ip", "set", "dns", iface, "static", dns)
+	hideCmdWindow(cmd)
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("设置静态DNS失败: %v", err)
@@ -126,6 +133,7 @@ func SetStaticIP(iface, ip, subnetMask, gateway, dns string) error {
 // Ping 测试网络连通性
 func Ping(host string) bool {
 	cmd := exec.Command("ping", "-n", "1", "-w", "3000", host)
+	hideCmdWindow(cmd)
 	err := cmd.Run()
 	return err == nil
 }

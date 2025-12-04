@@ -6,7 +6,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
+
+// hideCmdWindow 隐藏命令行窗口
+func hideCmdWindow(cmd *exec.Cmd) {
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+}
 
 // EnableAutoStart 启用开机启动
 func EnableAutoStart() error {
@@ -31,17 +39,23 @@ func EnableAutoStart() error {
 	taskName := "RouterSwitcher"
 
 	// 删除可能存在的旧任务
-	exec.Command("schtasks", "/Delete", "/TN", taskName, "/F").Run()
+	cmd := exec.Command("schtasks", "/Delete", "/TN", taskName, "/F")
+	hideCmdWindow(cmd)
+	err = cmd.Run()
+	if err != nil && err.Error() != "exit status 1" {
+		// exit status 1 通常表示任务不存在，这在删除时是正常的
+		return fmt.Errorf("删除旧任务失败: %v", err)
+	}
 
 	// 创建新任务
-	cmd := exec.Command("schtasks", "/Create",
+	cmd = exec.Command("schtasks", "/Create",
 		"/TN", taskName,
 		"/TR", fmt.Sprintf(`"%s"`, exePath),
 		"/SC", "ONLOGON",
 		"/RL", "HIGHEST",
 		"/F",
 	)
-
+	hideCmdWindow(cmd)
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("创建开机启动任务失败: %v", err)
@@ -61,9 +75,10 @@ func DisableAutoStart() error {
 
 	// 删除任务
 	cmd := exec.Command("schtasks", "/Delete", "/TN", taskName, "/F")
+	hideCmdWindow(cmd)
 	err := cmd.Run()
 	if err != nil {
-		// 如果任务不存在，不算错误
+		// 如果任务不存在(schtasks返回0x80)，不算错误
 		return nil
 	}
 
@@ -81,6 +96,7 @@ func IsAutoStartEnabled() bool {
 
 	// 查询任务是否存在
 	cmd := exec.Command("schtasks", "/Query", "/TN", taskName)
+	hideCmdWindow(cmd)
 	err := cmd.Run()
 	return err == nil
 }
