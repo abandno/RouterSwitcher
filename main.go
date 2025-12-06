@@ -437,6 +437,8 @@ func (a *WailsApp) OpenLocationSettings() error {
 
 // monitorNetwork 监控网络变化
 func (a *WailsApp) monitorNetwork() {
+	// 延迟几秒，等待网络连接
+	time.Sleep(5 * time.Second)
 	for {
 		if a.config.IPMode == "adaptive" {
 			a.checkAndSwitch()
