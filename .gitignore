@@ -1,0 +1,11 @@
+.idea
+.vscode
+rsrc.syso
+*.exe
+config.json
+*.log
+build/bin
+node_modules
+frontend/dist
+.task
+bin

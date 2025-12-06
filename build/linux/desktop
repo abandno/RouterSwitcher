@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=RouterSwitcher
+Comment=RouterSwitcher Description
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/RouterSwitcher.exe %u
+Terminal=false
+Type=Application
+Icon=RouterSwitcher.exe
+Categories=Utility;
+StartupWMClass=RouterSwitcher.exe
+
+ 
