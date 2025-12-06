@@ -46,51 +46,31 @@ RouterSwitcher 是一个基于 Wails v3 开发的桌面应用程序，主要用�
 
 ![托盘右键菜单](doc/image/托盘图标-右键菜单.png)
 
-
-## 🛠️ 技术栈
-
-- **后端**: Go 1.24+
-- **前端**: Vue 3 + Vite
-- **框架**: Wails v3
-- **平台**: Windows（目前仅支持 Windows 系统）
-
-## 📦 系统要求
-
-- Windows 10/11
-- 管理员权限（用于修改网络配置）
-- 位置服务权限（用于获取WiFi SSID信息）
-
 ## 🚀 安装和使用
 
-### 从源码构建
+### 安装
+
+#### 方式一：下载安装
+
+发布产物列表
+
+- **RouterSwitcher.exe**  ：双击直接运行
+- **RouterSwitcher-amd64-installer.exe**  ：windows安装包，安装后使用
+
+#### 方式二：源码构建
 
 1. **克隆项目**
    ```bash
    git clone <repository-url>
    cd RouterSwitcher
-   ```
-
-2. **安装依赖**
-   ```bash
-   # 安装 Go 依赖
-   go mod download
    
-   # 安装前端依赖
-   cd frontend
-   npm install
-   cd ..
+   # 或 打包生产环境报
+   wails3 task release
+   # 打包windows安装程序
+   wails3 task windows:package
    ```
-
-3. **开发模式运行**
-   ```bash
-   wails dev
-   ```
-
-4. **构建可执行文件**
-   ```bash
-   wails build
-   ```
-   构建完成后，可执行文件位于 `build/bin/` 目录下。
+   
+   构建完成后，可执行文件位于 `bin/` 目录下。
 
 ### 使用说明
 
@@ -104,7 +84,7 @@ RouterSwitcher 是一个基于 Wails v3 开发的桌面应用程序，主要用�
      - DNS：`192.168.31.2`
 
 2. **配置设置**
-   - 点击系统托盘图标打开配置界面
+   - 点击系统托盘图标打开配置界面（*不会自动显示配置界面*）
    - 根据您的网络环境修改配置：
      - **使用静态IP模式的网络 (SSID)**：输入您的家庭WiFi名称
      - **静态IP配置**：设置静态IP地址、网关和DNS服务器地址
@@ -144,22 +124,6 @@ RouterSwitcher 是一个基于 Wails v3 开发的桌面应用程序，主要用�
   - `dynamic`: 动态IP模式，强制使用DHCP获取IP
   - `static`: 静态IP模式，强制使用配置的静态IP
 
-## 🔧 工作原理
-
-### 自适应模式工作流程
-
-1. 程序启动后，每30秒自动检查一次网络状态（仅在自适应模式下）
-2. 检测当前连接的WiFi SSID是否与配置的 `HomeSSID` 匹配
-3. 如果SSID匹配，则通过ping命令检测旁路由（网关地址）是否可达
-4. 如果两个条件都满足，程序自动切换到静态IP配置
-5. 如果任一条件不满足，程序自动切换回动态IP（DHCP）模式
-
-### 网络检测机制
-
-- **WiFi SSID检测**：使用 Windows 系统的 `netsh wlan show interfaces` 命令获取当前连接的WiFi信息
-- **旁路由可达性检测**：使用系统ping命令检测网关地址是否可达（超时时间3秒）
-- **网络接口检测**：自动检测当前活动的网络接口，支持中英文Windows环境
-
 ## ⚠️ 注意事项
 
 1. **管理员权限**
@@ -179,7 +143,22 @@ RouterSwitcher 是一个基于 Wails v3 开发的桌面应用程序，主要用�
    - 配置文件保存在程序可执行文件同目录下
    - 如果配置文件损坏，程序会使用默认配置并重新创建配置文件
 
-## 📝 开发说明
+## 📝 开发指导
+
+**！！欢迎提交PR！！**
+
+### 🛠️ 技术栈
+
+- **后端**: Go 1.24+
+- **前端**: Vue 3 + Vite
+- **框架**: Wails v3
+- **平台**: Windows（目前仅支持 Windows 系统）
+
+### 📦 系统要求
+
+- Windows 10/11
+- 管理员权限（用于修改网络配置）
+- 位置服务权限（用于获取WiFi SSID信息）
 
 ### 项目结构
 
@@ -202,23 +181,43 @@ RouterSwitcher/
 └── build/               # 构建相关文件
 ```
 
+
+
 ### 开发命令
 
 ```bash
 # 开发模式（热重载）
 wails dev
 
+# 构建测试版本
+wails3 build
+
 # 构建生产版本
 wails3 task release
 
-# 构建开发版本（不压缩）
-cd frontend
-npm run build:dev
+# 打包windows安装程序
+wails3 task windows:package
 ```
 
 ### 日志文件
 
 程序运行时会生成 `app.log` 日志文件，位于程序可执行文件同目录下，可用于排查问题。
+
+### 工作原理
+
+#### 自适应模式工作流程
+
+1. 程序启动后，每30秒自动检查一次网络状态（仅在自适应模式下）
+2. 检测当前连接的WiFi SSID是否与配置的 `HomeSSID` 匹配
+3. 如果SSID匹配，则通过ping命令检测旁路由（网关地址）是否可达
+4. 如果两个条件都满足，程序自动切换到静态IP配置
+5. 如果任一条件不满足，程序自动切换回动态IP（DHCP）模式
+
+#### 网络检测机制
+
+- **WiFi SSID检测**：使用 Windows 系统的 `netsh wlan show interfaces` 命令获取当前连接的WiFi信息
+- **旁路由可达性检测**：使用系统ping命令检测网关地址是否可达（超时时间3秒）
+- **网络接口检测**：自动检测当前活动的网络接口，支持中英文Windows环境
 
 ## 📄 许可证
 
@@ -240,8 +239,4 @@ npm run build:dev
 
 - 邮箱：609069481@qq.com
 - 提交 Issue 或 Pull Request
-
----
-
-**注意**：部分系统指令依赖定位权限，请打开定位权限。
 

@@ -44,50 +44,31 @@ RouterSwitcher is a desktop application developed with Wails v3, primarily desig
 
 ![Tray Right-Click Menu](doc/image/托盘图标-右键菜单.png)
 
-## 🛠️ Tech Stack
-
-- **Backend**: Go 1.24+
-- **Frontend**: Vue 3 + Vite
-- **Framework**: Wails v3
-- **Platform**: Windows (currently only supports Windows systems)
-
-## 📦 System Requirements
-
-- Windows 10/11
-- Administrator privileges (required for modifying network configuration)
-- Location service permissions (required for obtaining WiFi SSID information)
-
 ## 🚀 Installation and Usage
 
-### Build from Source
+### Installation
 
-1. **Clone the repository**
+#### Method 1: Download and Install
+
+Release artifacts list:
+
+- **RouterSwitcher.exe**: Double-click to run directly
+- **RouterSwitcher-amd64-installer.exe**: Windows installer, use after installation
+
+#### Method 2: Build from Source
+
+1. **Clone the project**
    ```bash
    git clone <repository-url>
    cd RouterSwitcher
-   ```
-
-2. **Install dependencies**
-   ```bash
-   # Install Go dependencies
-   go mod download
    
-   # Install frontend dependencies
-   cd frontend
-   npm install
-   cd ..
+   # Or build production package
+   wails3 task release
+   # Package Windows installer
+   wails3 task windows:package
    ```
-
-3. **Run in development mode**
-   ```bash
-   wails dev
-   ```
-
-4. **Build executable**
-   ```bash
-   wails build
-   ```
-   After building, the executable file will be located in the `build/bin/` directory.
+   
+   After building, the executable file will be located in the `bin/` directory.
 
 ### Usage Instructions
 
@@ -101,7 +82,7 @@ RouterSwitcher is a desktop application developed with Wails v3, primarily desig
      - DNS: `192.168.31.2`
 
 2. **Configuration Settings**
-   - Click the system tray icon to open the configuration interface
+   - Click the system tray icon to open the configuration interface (*the configuration interface will not be displayed automatically*)
    - Modify configuration according to your network environment:
      - **Network using static IP mode (SSID)**: Enter your home WiFi name
      - **Static IP Configuration**: Set static IP address, gateway, and DNS server address
@@ -141,22 +122,6 @@ The configuration file `config.json` is located in the same directory as the pro
   - `dynamic`: Dynamic IP mode, forces DHCP to obtain IP
   - `static`: Static IP mode, forces the configured static IP
 
-## 🔧 How It Works
-
-### Adaptive Mode Workflow
-
-1. After program startup, automatically checks network status every 30 seconds (only in adaptive mode)
-2. Detects whether the currently connected WiFi SSID matches the configured `HomeSSID`
-3. If SSID matches, uses ping command to detect whether the bypass router (gateway address) is reachable
-4. If both conditions are met, the program automatically switches to static IP configuration
-5. If either condition is not met, the program automatically switches back to dynamic IP (DHCP) mode
-
-### Network Detection Mechanism
-
-- **WiFi SSID Detection**: Uses Windows system's `netsh wlan show interfaces` command to obtain currently connected WiFi information
-- **Bypass Router Reachability Detection**: Uses system ping command to detect whether the gateway address is reachable (timeout: 3 seconds)
-- **Network Interface Detection**: Automatically detects active network interfaces, supports both Chinese and English Windows environments
-
 ## ⚠️ Important Notes
 
 1. **Administrator Privileges**
@@ -176,7 +141,22 @@ The configuration file `config.json` is located in the same directory as the pro
    - Configuration file is saved in the same directory as the program executable
    - If the configuration file is corrupted, the program will use default configuration and recreate the configuration file
 
-## 📝 Development
+## 📝 Development Guide
+
+**!!Welcome to submit PRs!!**
+
+### 🛠️ Tech Stack
+
+- **Backend**: Go 1.24+
+- **Frontend**: Vue 3 + Vite
+- **Framework**: Wails v3
+- **Platform**: Windows (currently only supports Windows systems)
+
+### 📦 System Requirements
+
+- Windows 10/11
+- Administrator privileges (required for modifying network configuration)
+- Location service permissions (required for obtaining WiFi SSID information)
 
 ### Project Structure
 
@@ -205,41 +185,14 @@ RouterSwitcher/
 # Development mode (hot reload)
 wails dev
 
+# Build test version
+wails3 build
+
 # Build production version
 wails3 task release
 
-# Build development version (uncompressed)
-cd frontend
-npm run build:dev
+# Package Windows installer
+wails3 task windows:package
 ```
-
-### Log Files
-
-The program generates an `app.log` log file during runtime, located in the same directory as the program executable, which can be used for troubleshooting.
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 👤 Author
-
-- **Nisus Liu** - 609069481@qq.com
-
-## 🙏 Acknowledgments
-
-- [Wails](https://wails.io/) - Excellent Go desktop application framework
-- [Vue.js](https://vuejs.org/) - Progressive JavaScript framework
-- [Vite](https://vitejs.dev/) - Next-generation frontend build tool
-
-## 📮 Feedback and Support
-
-If you have any questions or suggestions, please contact us through:
-
-- Email: 609069481@qq.com
-- Submit an Issue or Pull Request
-
----
-
-**Note**: Some system commands depend on location permissions. Please enable location permissions.
 
 

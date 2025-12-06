@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "myapp.exe"
+name: "RouterSwitcher.exe"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "My Product Description"
+description: "RouterSwitcher Description"
 vendor: "My Company"
 homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/myapp.exe"
-    dst: "/usr/local/bin/myapp.exe"
+  - src: "./bin/RouterSwitcher.exe"
+    dst: "/usr/local/bin/RouterSwitcher.exe"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/myapp.exe.png"
-  - src: "./build/linux/myapp.exe.desktop"
-    dst: "/usr/share/applications/myapp.exe.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/RouterSwitcher.exe.png"
+  - src: "./build/linux/RouterSwitcher.exe.desktop"
+    dst: "/usr/share/applications/RouterSwitcher.exe.desktop"
 
 # Default dependencies for Debian 12/Ubuntu 22.04+ with WebKit 4.1
 depends:
