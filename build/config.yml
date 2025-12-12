@@ -47,6 +47,11 @@ fileAssociations:
 #    role: Editor
 #    mimeType: image/jpeg  # (optional)
 
-# Other data
-other:
-  - name: My Other Data
+# info:
+#   companyName: "Nisus Liu"
+#   productName: "RouterSwitcher"
+#   productIdentifier: "top.life666.RouterSwitcher"
+#   description: "路由自动切换工具"
+#   copyright: "(c) 2025 Nisus Liu"
+#   version: "1.0.0"  # Update this for each release
+#   productVersion: "1.0.0"

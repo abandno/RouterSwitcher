@@ -1,14 +1,14 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "1.0.0"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "{{.Info.ProductVersion}}",
-			"CompanyName": "{{.Info.CompanyName}}",
-			"FileDescription": "{{.Info.ProductName}}",
+			"ProductVersion": "1.0.0",
+			"CompanyName": "Nisus Liu",
+			"FileDescription": "RouterSwitcher",
 			"LegalCopyright": "{{.Info.Copyright}}",
-			"ProductName": "{{.Info.ProductName}}",
+			"ProductName": "RouterSwitcher",
 			"Comments": "{{.Info.Comments}}"
 		}
 	}
