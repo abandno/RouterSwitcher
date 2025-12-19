@@ -44,6 +44,10 @@ RouterSwitcher is a desktop application developed with Wails v3, primarily desig
 
 ![Tray Right-Click Menu](doc/image/托盘图标-右键菜单.png)
 
+## Usage scenario
+
+![使用情景](doc/image/使用情景.png)
+
 ## 🚀 Installation and Usage
 
 ### Installation
