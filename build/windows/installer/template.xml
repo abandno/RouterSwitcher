@@ -17,7 +17,7 @@
         PackageDisplayName="RouterSwitcher"
         PublisherName="CN=My Company"
         PublisherDisplayName="My Company"
-        Version="0.1.0.0"
+        Version="0.1.0.1"
         PackageDescription="RouterSwitcher Description">
         <Capabilities>
             <Capability Name="runFullTrust" />
