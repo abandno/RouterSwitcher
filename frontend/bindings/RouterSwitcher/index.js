@@ -8,5 +8,6 @@ export {
 };
 
 export {
-    Config
+    Config,
+    NetworkStatus
 } from "./models.js";

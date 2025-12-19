@@ -112,13 +112,44 @@
       <h3>当前网络状态</h3>
       <ul>
         <li>
-          <span class="label">是否连接到家庭网络:</span>
-          <span :class="['value', isConnectedToHome ? 'yes' : 'no']">{{ isConnectedToHome ? '是' : '否' }}</span>
+          <span class="label">WiFi:</span>
+          <span class="value-text">{{ networkStatus.WiFiName || '未知' }}</span>
+          <span class="value-text"></span>
+          <span :class="['value-status', networkStatus.WiFiConnected ? 'connected' : 'disconnected', 'align-right']">
+            {{ networkStatus.WiFiConnected ? '连接' : '断开' }}
+          </span>
         </li>
         <li>
-          <span class="label">默认网关是否可达:</span>
-          <span :class="['value', isSideRouterReachable ? 'yes' : 'no']">{{ isSideRouterReachable ? '是' : '否' }}</span>
+          <span class="label">IP:</span>
+          <span class="value-text">{{ networkStatus.IPAddress || '未知' }}</span>
+          <span class="value-text">{{ networkStatus.IPAssignment || '未知' }}</span>
+          <span class="align-right">&nbsp;</span>
         </li>
+        <li>
+          <span class="label">网关:</span>
+          <span class="value-text">{{ networkStatus.Gateway || '未知' }}</span>
+          <span class="value-text"></span>
+          <span :class="['value-status', networkStatus.GatewayReachable ? 'connected' : 'disconnected', 'align-right']">
+            {{ networkStatus.GatewayReachable ? '连接' : '断开' }}
+          </span>
+        </li>
+        <li>
+          <span class="label">DNS:</span>
+          <span class="value-text">{{ networkStatus.DNS || '未知' }}</span>
+          <span class="value-text">{{ networkStatus.DNSAssignment || '未知' }}</span>
+          <span :class="['value-status', networkStatus.DNSReachable ? 'connected' : 'disconnected', 'align-right']">
+            {{ networkStatus.DNSReachable ? '连接' : '断开' }}
+          </span>
+        </li>
+        <!--<li>
+          <span class="label">IP分配:</span>
+          <span class="value-text">{{ networkStatus.IPAssignment || '未知' }}</span>
+        </li>
+        <li>
+          <span class="label">DNS分配:</span>
+          <span class="value-text">{{ networkStatus.DNSAssignment || '未知' }}</span>
+        </li>
+        -->
       </ul>
     </div>
   </div>
@@ -126,7 +157,7 @@
 
 <script>
 import IpInput from './IpInput.vue'
-import { GetConfig, UpdateConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable } from '../../bindings/RouterSwitcher/wailsapp'
+import { GetConfig, UpdateConfig, SwitchToStatic, SwitchToDHCP, IsConnectedToHomeNetwork, IsSideRouterReachable, GetNetworkStatus } from '../../bindings/RouterSwitcher/wailsapp'
 import { Events } from '@wailsio/runtime'
 import { isValidIp } from '../utils';
 
@@ -148,6 +179,17 @@ export default {
       switching: false,
       isConnectedToHome: false,
       isSideRouterReachable: false,
+      networkStatus: {
+        WiFiName: '未知',
+        WiFiConnected: false,
+        IPAddress: '未知',
+        Gateway: '未知',
+        GatewayReachable: false,
+        DNS: '未知',
+        DNSReachable: false,
+        IPAssignment: '未知',
+        DNSAssignment: '未知'
+      },
       configUpdatedOff: null,
       windowShownOff: null,
       windowHiddenOff: null,
@@ -350,6 +392,12 @@ export default {
       try {
         this.isConnectedToHome = await IsConnectedToHomeNetwork()
         this.isSideRouterReachable = await IsSideRouterReachable()
+        
+        // 获取详细网络状态
+        const status = await GetNetworkStatus()
+        if (status) {
+          this.networkStatus = status
+        }
         // console.log('updateNetworkStatus success', this.isConnectedToHome, this.isSideRouterReachable)
       } catch (err) {
         console.error('获取网络状态失败:', err)
@@ -544,8 +592,10 @@ fieldset legend {
 }
 
 .status li {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 80px 1fr 120px 60px;
+  gap: 10px;
+  align-items: center;
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid #eee;
@@ -574,6 +624,34 @@ fieldset legend {
 .status .value.no {
   background-color: #f8d7da;
   color: #721c24;
+}
+
+.status span {
+  text-align: left;
+}
+.status .value-text {
+  font-weight: 500;
+  color: #495057;
+  text-align: left;
+}
+
+.status .value-status {
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status .align-right {
+  text-align: right;
+  justify-self: end;
+}
+
+.status .value-status.connected {
+  color: #28a745;
+}
+
+.status .value-status.disconnected {
+  color: #dc3545;
 }
 
 /* 错误消息样式 */

@@ -77,3 +77,99 @@ export class Config {
         return new Config(/** @type {Partial<Config>} */($$parsedSource));
     }
 }
+
+/**
+ * NetworkStatus 网络状态结构
+ */
+export class NetworkStatus {
+    /**
+     * Creates a new NetworkStatus instance.
+     * @param {Partial<NetworkStatus>} [$$source = {}] - The source object to create the NetworkStatus.
+     */
+    constructor($$source = {}) {
+        if (!("WiFiName" in $$source)) {
+            /**
+             * WiFi名称
+             * @member
+             * @type {string}
+             */
+            this["WiFiName"] = "";
+        }
+        if (!("WiFiConnected" in $$source)) {
+            /**
+             * WiFi连接状态
+             * @member
+             * @type {boolean}
+             */
+            this["WiFiConnected"] = false;
+        }
+        if (!("IPAddress" in $$source)) {
+            /**
+             * 当前IP地址
+             * @member
+             * @type {string}
+             */
+            this["IPAddress"] = "";
+        }
+        if (!("Gateway" in $$source)) {
+            /**
+             * 当前网关
+             * @member
+             * @type {string}
+             */
+            this["Gateway"] = "";
+        }
+        if (!("GatewayReachable" in $$source)) {
+            /**
+             * 网关是否可达
+             * @member
+             * @type {boolean}
+             */
+            this["GatewayReachable"] = false;
+        }
+        if (!("DNS" in $$source)) {
+            /**
+             * 当前DNS
+             * @member
+             * @type {string}
+             */
+            this["DNS"] = "";
+        }
+        if (!("DNSReachable" in $$source)) {
+            /**
+             * DNS是否可达
+             * @member
+             * @type {boolean}
+             */
+            this["DNSReachable"] = false;
+        }
+        if (!("IPAssignment" in $$source)) {
+            /**
+             * IP分配方式: "自动(DHCP)" 或 "手动"
+             * @member
+             * @type {string}
+             */
+            this["IPAssignment"] = "";
+        }
+        if (!("DNSAssignment" in $$source)) {
+            /**
+             * DNS分配方式: "自动(DHCP)" 或 "手动"
+             * @member
+             * @type {string}
+             */
+            this["DNSAssignment"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NetworkStatus instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NetworkStatus}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NetworkStatus(/** @type {Partial<NetworkStatus>} */($$parsedSource));
+    }
+}

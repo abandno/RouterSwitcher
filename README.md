@@ -46,6 +46,10 @@ RouterSwitcher 是一个基于 Wails v3 开发的桌面应用程序，主要用�
 
 ![托盘右键菜单](doc/image/托盘图标-右键菜单.png)
 
+## 使用情景
+
+![使用情景](doc/image/使用情景.png)
+
 ## 🚀 安装和使用
 
 ### 安装

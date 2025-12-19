@@ -21,14 +21,17 @@ var icon []byte
 
 // 根据需求文档定义不同颜色的图标
 // 自适应IP - 紫色图标
+//
 //go:embed icon/purple.png
 var purpleIcon []byte
 
 // 动态IP - 红色图标
+//
 //go:embed icon/red.png
 var redIcon []byte
 
 // 静态IP - 蓝色图标
+//
 //go:embed icon/blue.png
 var blueIcon []byte
 
@@ -99,7 +102,9 @@ func (a *WailsApp) createTrayMenu() {
 	default:
 		a.systemTray.SetIcon(icon)
 	}
-	a.systemTray.SetTooltip("路由器切换工具")
+
+	// 设置初始tooltip
+	a.updateTrayTooltip()
 
 	// ========== 创建托盘菜单 ==========
 	// 创建菜单
@@ -238,6 +243,64 @@ func (a *WailsApp) updateTrayMenuState() {
 		// 重新应用菜单到系统托盘，确保勾选状态刷新
 		a.systemTray.SetMenu(a.trayMenu)
 	}
+
+	// 更新托盘tooltip
+	a.updateTrayTooltip()
+}
+
+// updateTrayTooltip 更新托盘图标tooltip，显示当前网络状态
+func (a *WailsApp) updateTrayTooltip() {
+	if a.systemTray == nil {
+		return
+	}
+
+	status, err := GetCurrentNetworkStatus()
+	if err != nil {
+		log.Printf("获取网络状态失败: %v", err)
+		a.systemTray.SetTooltip("路由器切换工具")
+		return
+	}
+
+	// 构建tooltip文本（优化为更简洁的格式，避免超出Windows tooltip长度限制）
+	tooltip := "路由器切换工具\n"
+	tooltip += "\n"
+
+	// WiFi信息（使用符号表示状态：✓连接 ✗断开）
+	wifiStatus := "✗"
+	if status.WiFiConnected {
+		wifiStatus = "✓"
+	}
+	tooltip += fmt.Sprintf("WiFi: %s [%s]\n", status.WiFiName, wifiStatus)
+
+	// IP信息
+	tooltip += fmt.Sprintf("IP: %s\n", status.IPAddress)
+
+	// 网关信息（使用符号表示状态）
+	gatewayStatus := "✗"
+	if status.GatewayReachable {
+		gatewayStatus = "✓"
+	}
+	tooltip += fmt.Sprintf("网关: %s [%s]\n", status.Gateway, gatewayStatus)
+
+	// DNS信息（使用符号表示状态）
+	dnsStatus := "✗"
+	if status.DNSReachable {
+		dnsStatus = "✓"
+	}
+	tooltip += fmt.Sprintf("DNS: %s [%s]\n", status.DNS, dnsStatus)
+
+	// 分配方式（简化显示）
+	ipAssign := "DHCP"
+	if status.IPAssignment == "手动" {
+		ipAssign = "手动"
+	}
+	dnsAssign := "DHCP"
+	if status.DNSAssignment == "手动" {
+		dnsAssign = "手动"
+	}
+	tooltip += fmt.Sprintf("IP:%s DNS:%s", ipAssign, dnsAssign)
+
+	a.systemTray.SetTooltip(tooltip)
 }
 
 // showWindow 显示配置窗口
@@ -428,6 +491,26 @@ func (a *WailsApp) IsSideRouterReachable() bool {
 	return a.isSideRouterReachable()
 }
 
+// GetNetworkStatus 获取当前网络详细状态
+func (a *WailsApp) GetNetworkStatus() *NetworkStatus {
+	log.Println("GetNetworkStatus")
+	status, err := GetCurrentNetworkStatus()
+	if err != nil {
+		log.Printf("获取网络状态失败: %v", err)
+		// 返回空状态而不是nil
+		return &NetworkStatus{
+			WiFiName:      "未知",
+			WiFiConnected: false,
+			IPAddress:     "未知",
+			Gateway:       "未知",
+			DNS:           "未知",
+			IPAssignment:  "未知",
+			DNSAssignment: "未知",
+		}
+	}
+	return status
+}
+
 // OpenLocationSettings 打开位置设置页面
 func (a *WailsApp) OpenLocationSettings() error {
 	cmd := exec.Command("cmd", "/C", "start", "ms-settings:privacy-location")
@@ -439,10 +522,16 @@ func (a *WailsApp) OpenLocationSettings() error {
 func (a *WailsApp) monitorNetwork() {
 	// 延迟几秒，等待网络连接
 	time.Sleep(5 * time.Second)
+	
+	// 初始启动时要执行一次, 保证和当前配置文件一致
+	a.checkAndSwitch()
+
 	for {
 		if a.config.IPMode == "adaptive" {
 			a.checkAndSwitch()
 		}
+		// 更新托盘tooltip以显示最新网络状态
+		a.updateTrayTooltip()
 		time.Sleep(30 * time.Second) // 每30秒检查一次
 	}
 }
@@ -661,24 +750,24 @@ func (a *WailsApp) handleAutoStart() {
 func main() {
 	// 禁用日志输出
 	log.SetOutput(io.Discard)
-	
+
 	// 注释掉原有的日志设置代码
 	/*
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	// 创建日志文件
-	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Printf("无法创建日志文件: %v", err)
-	} else {
-		// 将日志同时输出到文件和控制台
-		multiWriter := io.MultiWriter(os.Stdout, logFile)
-		log.SetOutput(multiWriter)
-		defer func() {
-			if err := logFile.Close(); err != nil {
-				log.Printf("关闭日志文件失败: %v", err)
-			}
-		}()
-	}
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		// 创建日志文件
+		logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			log.Printf("无法创建日志文件: %v", err)
+		} else {
+			// 将日志同时输出到文件和控制台
+			multiWriter := io.MultiWriter(os.Stdout, logFile)
+			log.SetOutput(multiWriter)
+			defer func() {
+				if err := logFile.Close(); err != nil {
+					log.Printf("关闭日志文件失败: %v", err)
+				}
+			}()
+		}
 	*/
 
 	// Create an instance of the app structure
