@@ -34,6 +34,16 @@ export function GetConfig() {
 }
 
 /**
+ * GetNetworkStatus 获取当前网络详细状态
+ * @returns {$CancellablePromise<$models.NetworkStatus | null>}
+ */
+export function GetNetworkStatus() {
+    return $Call.ByID(4224989919).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
+/**
  * Greet returns a greeting for the given name
  * @param {string} name
  * @returns {$CancellablePromise<string>}
@@ -110,3 +120,5 @@ export function UpdateConfig(config) {
 // Private type creation functions
 const $$createType0 = $models.Config.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = $models.NetworkStatus.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
